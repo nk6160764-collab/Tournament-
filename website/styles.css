@@ -368,11 +368,11 @@ button, input, select, textarea {
 }
 
 .grid-2 {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
 }
 
 .grid-3 {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .card {
@@ -566,8 +566,9 @@ button, input, select, textarea {
   bottom: 0;
   z-index: 70;
   background: rgba(8, 13, 10, 0.96);
+  backdrop-filter: blur(10px);
   border-top: 1px solid rgba(57, 255, 20, 0.45);
-  padding: 10px 14px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -580,10 +581,79 @@ button, input, select, textarea {
   }
 }
 
+/* Footer */
+.site-footer {
+  border-top: 1px solid var(--border-cyber);
+  background: var(--bg-surface);
+  margin-top: 24px;
+  padding: 20px 0;
+}
+
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.footer-links {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.footer-links a:hover {
+  color: var(--neon-green);
+}
+
+/* Mobile refinements (Android & iPhone portrait) */
+@media (max-width: 600px) {
+  .topbar-inner {
+    padding: 8px 0;
+    gap: 8px;
+  }
+  .brand-logo {
+    width: 34px;
+    height: 34px;
+  }
+  .brand-title {
+    font-size: 0.98rem;
+  }
+  .brand-sub {
+    display: none;
+  }
+  .topbar-actions {
+    gap: 6px;
+  }
+  .topbar-actions .btn-sm {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    min-height: 38px;
+  }
+  .wallet-pill {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    min-height: 38px;
+  }
+  .hero-content {
+    padding: 20px 16px;
+  }
+  .hero-ctas .btn {
+    width: 100%;
+  }
+  .modal {
+    padding: 16px;
+  }
+}
+
 /* Toast */
 .toast {
   position: fixed;
-  bottom: 84px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   left: 16px;
   max-width: 420px;

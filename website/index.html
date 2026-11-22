@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#040705" />
   <title>GamerZone PK — Free Fire Esports Tournaments & Direct APK</title>
   <meta name="description" content="Official GamerZone PK Free Fire esports platform. Download the free Android APK directly, join Solo/Duo/Squad/Clash Squad tournaments, manage EasyPaisa & JazzCash wallet, and compete for PKR prizes." />
   <link rel="icon" type="image/png" href="./assets/gamerzone-icon.png" />
+  <link rel="apple-touch-icon" href="./assets/gamerzone-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Russo+One&display=swap" rel="stylesheet" />
@@ -268,7 +270,7 @@
     </section>
 
     <!-- Official Payment Methods & Support -->
-    <section class="section">
+    <section id="payments" class="section">
       <div class="section-header">
         <div>
           <h2 class="section-title">OFFICIAL PAYMENT ACCOUNTS & SUPPORT</h2>
@@ -291,7 +293,7 @@
       </div>
     </section>
 
-    <section class="section">
+    <section id="support" class="section">
       <div class="grid grid-2">
         <div class="card">
           <h3>Rules & Fair Play</h3>
@@ -316,13 +318,28 @@
     </section>
   </main>
 
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>
+        <div class="brand-title" style="font-size:1rem;">GAMERZONE PK</div>
+        <div class="section-sub">Pakistan's Free Fire Esports Tournament & PKR Wallet Platform</div>
+      </div>
+      <div class="footer-links">
+        <a href="#top">Download APK</a>
+        <a href="#arena">Live Arena</a>
+        <a href="#payments">EasyPaisa / JazzCash</a>
+        <a href="#support">Rules & Support</a>
+      </div>
+    </div>
+  </footer>
+
   <!-- Sticky Mobile APK Download Bar -->
   <div class="mobile-apk-bar">
     <div>
-      <div style="font-weight:700; color:var(--neon-green); font-size:0.9rem;">GamerZone PK APK (v1.0)</div>
-      <div style="font-size:0.75rem; color:var(--text-secondary);">Direct Free Download • 27.1 MB</div>
+      <div id="mobileApkTitle" style="font-weight:700; color:var(--neon-green); font-size:0.9rem;">GamerZone PK APK (v1.0)</div>
+      <div id="mobileApkMeta" style="font-size:0.75rem; color:var(--text-secondary);">Direct Free Download • 19.3 MB</div>
     </div>
-    <a class="btn btn-primary btn-sm" href="./downloads/gamerzone-pk.apk" download="GamerZonePK-v1.0.apk">⬇ Download APK</a>
+    <a id="mobileDownloadBtn" class="btn btn-primary btn-sm" href="./downloads/gamerzone-pk.apk" download="GamerZonePK-v1.0.apk">⬇ Download APK</a>
   </div>
 
   <!-- Generic Modal Container -->

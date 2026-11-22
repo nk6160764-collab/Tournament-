@@ -25,23 +25,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check APK build mode
+        id: apk_check
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+          elif [ ! -f website/downloads/gamerzone-pk.apk ]; then
+            echo "mode=debug" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=prebuilt" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up JDK 17
+        if: steps.apk_check.outputs.mode != 'prebuilt'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK & Gradle
+      - name: Set up Gradle
+        if: steps.apk_check.outputs.mode != 'prebuilt'
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build Signed Release APK (or Debug Fallback)
+      - name: Build APK
+        if: steps.apk_check.outputs.mode != 'prebuilt'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           mkdir -p website/downloads
-          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+          if [ "${{ steps.apk_check.outputs.mode }}" = "release" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
             export KEYSTORE_PATH="$PWD/my-upload-key.jks"
             gradle :app:assembleRelease

@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import {
   getAuth,
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
@@ -149,6 +150,42 @@ async function copyText(text, label = "Copied") {
 
 document.querySelectorAll(".copy-btn").forEach((btn) => {
   btn.addEventListener("click", () => copyText(btn.dataset.copy, "Account Number Copied"));
+});
+
+function syncApkDownloadMetadata() {
+  const downloadIds = ["headerDownloadBtn", "heroDownloadBtn", "mobileDownloadBtn"];
+  downloadIds.forEach((id) => {
+    const link = document.getElementById(id);
+    if (link) {
+      link.setAttribute("href", GAMERZONE_CONFIG.apkDownloadUrl);
+      link.setAttribute("download", GAMERZONE_CONFIG.apkFileName);
+    }
+  });
+  const setText = (id, text) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = text;
+  };
+  setText("metaVersion", GAMERZONE_CONFIG.apkVersion);
+  setText("metaSize", GAMERZONE_CONFIG.apkSizeLabel);
+  setText("metaAndroid", GAMERZONE_CONFIG.minAndroid);
+  setText("mobileApkTitle", `GamerZone PK APK (${GAMERZONE_CONFIG.apkVersion})`);
+  setText("mobileApkMeta", `Direct Free Download • ${GAMERZONE_CONFIG.apkSizeLabel}`);
+  const heroBtn = document.getElementById("heroDownloadBtn");
+  if (heroBtn) {
+    heroBtn.textContent = `⬇ Download Android APK (${GAMERZONE_CONFIG.apkVersion})`;
+  }
+}
+syncApkDownloadMetadata();
+
+getRedirectResult(auth).catch((err) => {
+  if (err?.code === "auth/unauthorized-domain") {
+    showToast(
+      `Add ${window.location.hostname} under Firebase Console -> Authentication -> Settings -> Authorized domains.`,
+      true
+    );
+  } else if (err?.message) {
+    showToast(err.message, true);
+  }
 });
 
 // APK Install Modal
@@ -791,7 +828,7 @@ function renderWallet() {
             ${renderStatusBadge(d.status)}
             ${
               d.screenshotBase64
-                ? `<button class="btn btn-ghost btn-sm view-shot-btn" data-shot="${escapeHtml(d.screenshotBase64)}" type="button">View Proof</button>`
+                ? `<button class="btn btn-ghost btn-sm view-shot-btn" data-depid="${escapeHtml(d.id)}" type="button">View Proof</button>`
                 : ""
             }
           </div>
@@ -846,14 +883,22 @@ function renderWallet() {
 function bindScreenshotButtons() {
   document.querySelectorAll(".view-shot-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const raw = btn.dataset.shot || "";
-      const src = raw.startsWith("data:") ? raw : `data:image/jpeg;base64,${raw}`;
+      const depId = btn.dataset.depid || "";
+      const record =
+        state.adminDeposits.find((d) => d.id === depId) ||
+        state.myDeposits.find((d) => d.id === depId);
+      const raw = record?.screenshotBase64 || btn.dataset.shot || "";
+      if (!raw) {
+        showToast("Screenshot not available.", true);
+        return;
+      }
+      const src = raw.startsWith("data:image/") ? raw : `data:image/jpeg;base64,${raw}`;
       openModal(`
         <div class="row-between" style="margin-bottom:12px;">
           <h3>Payment Screenshot Proof</h3>
           <button class="btn btn-ghost btn-sm" id="closeShotBtn" type="button">Close</button>
         </div>
-        <img src="${src}" alt="Payment Screenshot" style="width:100%; max-height:70vh; object-fit:contain; border-radius:10px;" />
+        <img src="${escapeHtml(src)}" alt="Payment Screenshot" style="width:100%; max-height:70vh; object-fit:contain; border-radius:10px;" />
       `);
       document.getElementById("closeShotBtn")?.addEventListener("click", closeModal);
     });
@@ -1378,12 +1423,12 @@ function renderAdmin() {
                 ${
                   d.screenshotBase64
                     ? `<div style="margin-top:10px;">
-                         <img class="screenshot-thumb view-shot-btn" style="cursor:pointer;" data-shot="${escapeHtml(d.screenshotBase64)}" src="data:image/jpeg;base64,${escapeHtml(d.screenshotBase64)}" alt="Deposit Payment Proof" />
+                         <img class="screenshot-thumb view-shot-btn" style="cursor:pointer;" data-depid="${escapeHtml(d.id)}" src="data:image/jpeg;base64,${escapeHtml(d.screenshotBase64)}" alt="Deposit Payment Proof" />
                        </div>`
                     : ""
                 }
                 <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                  ${d.screenshotBase64 ? `<button class="btn btn-ghost btn-sm view-shot-btn" data-shot="${escapeHtml(d.screenshotBase64)}" type="button">Zoom Screenshot</button>` : ""}
+                  ${d.screenshotBase64 ? `<button class="btn btn-ghost btn-sm view-shot-btn" data-depid="${escapeHtml(d.id)}" type="button">Zoom Screenshot</button>` : ""}
                   ${
                     d.status === "pending"
                       ? `<button class="btn btn-primary btn-sm approve-dep-btn" data-id="${escapeHtml(d.id)}" type="button">Approve & Credit</button>
@@ -1670,136 +1715,185 @@ function renderAdmin() {
           updatedAt: serverTimestamp()
         });
         showToast("Announcement published!");
+        e.target.reset();
       } catch (err) {
         showToast(err.message, true);
       }
     });
     el.adminContent.querySelectorAll(".del-ann-btn").forEach((b) =>
       b.addEventListener("click", async () => {
-        await deleteDoc(doc(db, "announcements", b.dataset.id));
-        showToast("Announcement deleted.");
+        try {
+          await deleteDoc(doc(db, "announcements", b.dataset.id));
+          showToast("Announcement deleted.");
+        } catch (err) {
+          showToast(err.message || "Failed to delete announcement.", true);
+        }
       })
     );
   }
 }
 
+function openAdminDecisionModal({ title, summary, defaultNote, confirmLabel, confirmClass, onConfirm }) {
+  openModal(`
+    <div class="row-between" style="margin-bottom:12px;">
+      <h3>${escapeHtml(title)}</h3>
+      <button class="btn btn-ghost btn-sm" id="closeDecisionModal" type="button">Cancel</button>
+    </div>
+    <p class="section-sub" style="margin-bottom:12px;">${escapeHtml(summary)}</p>
+    <form id="adminDecisionForm">
+      <div class="field">
+        <label for="decisionNote">Admin Note</label>
+        <input id="decisionNote" class="input" maxlength="300" value="${escapeHtml(defaultNote)}" required />
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="cancelDecisionBtn" type="button">Cancel</button>
+        <button class="btn ${escapeHtml(confirmClass)}" id="confirmDecisionBtn" type="submit">${escapeHtml(confirmLabel)}</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("closeDecisionModal")?.addEventListener("click", closeModal);
+  document.getElementById("cancelDecisionBtn")?.addEventListener("click", closeModal);
+  document.getElementById("adminDecisionForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const note = document.getElementById("decisionNote").value.trim() || defaultNote;
+    const submitBtn = document.getElementById("confirmDecisionBtn");
+    if (submitBtn) submitBtn.disabled = true;
+    closeModal();
+    await onConfirm(note);
+  });
+}
+
 async function reviewDeposit(reqId, approve) {
   const req = state.adminDeposits.find((d) => d.id === reqId);
   if (!req) return;
-  const note = approve ? "Verified by Admin" : prompt("Optional rejection reason:", "Invalid TID or unclear screenshot") || "Rejected by Admin";
+  openAdminDecisionModal({
+    title: approve ? "Approve Deposit & Credit Wallet" : "Reject Deposit Request",
+    summary: `${req.inGameName || "Player"} • ${Number(req.amountPkr)} PKR • TID: ${req.transactionId}`,
+    defaultNote: approve ? "Verified by Admin" : "Invalid TID or unclear screenshot",
+    confirmLabel: approve ? "Approve & Credit" : "Reject Deposit",
+    confirmClass: approve ? "btn-primary" : "btn-danger",
+    onConfirm: async (note) => {
+      try {
+        await runTransaction(db, async (tx) => {
+          const depRef = doc(db, "depositRequests", req.id);
+          const userRef = doc(db, "users", req.userId);
+          const txRef = doc(collection(db, "users", req.userId, "walletTransactions"));
+          const depSnap = await tx.get(depRef);
+          if (!depSnap.exists() || depSnap.data().status !== "pending") throw new Error("Already processed.");
+          const userSnap = await tx.get(userRef);
+          const curBal = Number(userSnap.data()?.walletBalancePkr || 0);
 
-  try {
-    await runTransaction(db, async (tx) => {
-      const depRef = doc(db, "depositRequests", req.id);
-      const userRef = doc(db, "users", req.userId);
-      const txRef = doc(collection(db, "users", req.userId, "walletTransactions"));
-      const depSnap = await tx.get(depRef);
-      if (!depSnap.exists() || depSnap.data().status !== "pending") throw new Error("Already processed.");
-      const userSnap = await tx.get(userRef);
-      const curBal = Number(userSnap.data()?.walletBalancePkr || 0);
-
-      tx.update(depRef, {
-        status: approve ? "approved" : "rejected",
-        adminNote: note.slice(0, 300),
-        reviewedBy: state.user.uid,
-        updatedAt: serverTimestamp()
-      });
-      if (approve) {
-        const newBal = curBal + Number(req.amountPkr);
-        tx.update(userRef, { walletBalancePkr: newBal, updatedAt: serverTimestamp() });
-        const txPayload = {
-          userId: req.userId,
-          type: "deposit",
-          direction: "credit",
-          amountPkr: Number(req.amountPkr),
-          title: `${GAMERZONE_CONFIG.paymentMethods[req.paymentMethod]?.displayName || "Wallet"} Deposit Approved`,
-          subtitle: `TID: ${req.transactionId}`.slice(0, 150),
-          referenceId: req.id,
-          status: "completed",
-          balanceAfterPkr: newBal,
-          createdAt: serverTimestamp()
-        };
-        tx.set(txRef, txPayload);
-        tx.set(doc(db, "adminTransactions", txRef.id), {
-          ...txPayload,
-          inGameName: req.inGameName || "",
-          userEmail: req.userEmail || ""
+          tx.update(depRef, {
+            status: approve ? "approved" : "rejected",
+            adminNote: note.slice(0, 300),
+            reviewedBy: state.user.uid,
+            updatedAt: serverTimestamp()
+          });
+          if (approve) {
+            const newBal = curBal + Number(req.amountPkr);
+            tx.update(userRef, { walletBalancePkr: newBal, updatedAt: serverTimestamp() });
+            const txPayload = {
+              userId: req.userId,
+              type: "deposit",
+              direction: "credit",
+              amountPkr: Number(req.amountPkr),
+              title: `${GAMERZONE_CONFIG.paymentMethods[req.paymentMethod]?.displayName || "Wallet"} Deposit Approved`,
+              subtitle: `TID: ${req.transactionId}`.slice(0, 150),
+              referenceId: req.id,
+              status: "completed",
+              balanceAfterPkr: newBal,
+              createdAt: serverTimestamp()
+            };
+            tx.set(txRef, txPayload);
+            tx.set(doc(db, "adminTransactions", txRef.id), {
+              ...txPayload,
+              inGameName: req.inGameName || "",
+              userEmail: req.userEmail || ""
+            });
+          }
         });
+        showToast(approve ? "Deposit approved & balance credited!" : "Deposit rejected.");
+      } catch (err) {
+        showToast(err.message, true);
       }
-    });
-    showToast(approve ? "Deposit approved & balance credited!" : "Deposit rejected.");
-  } catch (err) {
-    showToast(err.message, true);
-  }
+    }
+  });
 }
 
 async function reviewWithdrawal(reqId, approve) {
   const req = state.adminWithdrawals.find((w) => w.id === reqId);
   if (!req) return;
-  const note = approve ? "Paid by Admin" : prompt("Rejection reason (balance will be refunded):", "Account details mismatch") || "Rejected & refunded";
+  openAdminDecisionModal({
+    title: approve ? "Confirm Withdrawal Payout" : "Reject & Refund Withdrawal",
+    summary: `${req.inGameName || "Player"} • ${Number(req.amountPkr)} PKR • ${req.accountNumber}`,
+    defaultNote: approve ? "Paid by Admin" : "Account details mismatch",
+    confirmLabel: approve ? "Mark Paid" : "Reject & Refund",
+    confirmClass: approve ? "btn-primary" : "btn-danger",
+    onConfirm: async (note) => {
+      try {
+        await runTransaction(db, async (tx) => {
+          const wdRef = doc(db, "withdrawalRequests", req.id);
+          const userRef = doc(db, "users", req.userId);
+          const txRef = doc(collection(db, "users", req.userId, "walletTransactions"));
+          const wdSnap = await tx.get(wdRef);
+          if (!wdSnap.exists() || wdSnap.data().status !== "pending") throw new Error("Already processed.");
+          const userSnap = await tx.get(userRef);
+          const curBal = Number(userSnap.data()?.walletBalancePkr || 0);
 
-  try {
-    await runTransaction(db, async (tx) => {
-      const wdRef = doc(db, "withdrawalRequests", req.id);
-      const userRef = doc(db, "users", req.userId);
-      const txRef = doc(collection(db, "users", req.userId, "walletTransactions"));
-      const wdSnap = await tx.get(wdRef);
-      if (!wdSnap.exists() || wdSnap.data().status !== "pending") throw new Error("Already processed.");
-      const userSnap = await tx.get(userRef);
-      const curBal = Number(userSnap.data()?.walletBalancePkr || 0);
-
-      tx.update(wdRef, {
-        status: approve ? "approved" : "rejected",
-        adminNote: note.slice(0, 300),
-        reviewedBy: state.user.uid,
-        updatedAt: serverTimestamp()
-      });
-      if (approve) {
-        const txPayload = {
-          userId: req.userId,
-          type: "withdrawal",
-          direction: "debit",
-          amountPkr: Number(req.amountPkr),
-          title: `${GAMERZONE_CONFIG.paymentMethods[req.paymentMethod]?.displayName || "Wallet"} Payout Sent`,
-          subtitle: `To: ${req.accountNumber} • ${note}`.slice(0, 150),
-          referenceId: req.id,
-          status: "completed",
-          balanceAfterPkr: curBal,
-          createdAt: serverTimestamp()
-        };
-        tx.set(txRef, txPayload);
-        tx.set(doc(db, "adminTransactions", txRef.id), {
-          ...txPayload,
-          inGameName: req.inGameName || "",
-          userEmail: req.userEmail || ""
+          tx.update(wdRef, {
+            status: approve ? "approved" : "rejected",
+            adminNote: note.slice(0, 300),
+            reviewedBy: state.user.uid,
+            updatedAt: serverTimestamp()
+          });
+          if (approve) {
+            const txPayload = {
+              userId: req.userId,
+              type: "withdrawal",
+              direction: "debit",
+              amountPkr: Number(req.amountPkr),
+              title: `${GAMERZONE_CONFIG.paymentMethods[req.paymentMethod]?.displayName || "Wallet"} Payout Sent`,
+              subtitle: `To: ${req.accountNumber} • ${note}`.slice(0, 150),
+              referenceId: req.id,
+              status: "completed",
+              balanceAfterPkr: curBal,
+              createdAt: serverTimestamp()
+            };
+            tx.set(txRef, txPayload);
+            tx.set(doc(db, "adminTransactions", txRef.id), {
+              ...txPayload,
+              inGameName: req.inGameName || "",
+              userEmail: req.userEmail || ""
+            });
+          } else {
+            const refunded = curBal + Number(req.amountPkr);
+            tx.update(userRef, { walletBalancePkr: refunded, updatedAt: serverTimestamp() });
+            const txPayload = {
+              userId: req.userId,
+              type: "withdrawal_refund",
+              direction: "credit",
+              amountPkr: Number(req.amountPkr),
+              title: "Withdrawal Refunded",
+              subtitle: note.slice(0, 150),
+              referenceId: req.id,
+              status: "completed",
+              balanceAfterPkr: refunded,
+              createdAt: serverTimestamp()
+            };
+            tx.set(txRef, txPayload);
+            tx.set(doc(db, "adminTransactions", txRef.id), {
+              ...txPayload,
+              inGameName: req.inGameName || "",
+              userEmail: req.userEmail || ""
+            });
+          }
         });
-      } else {
-        const refunded = curBal + Number(req.amountPkr);
-        tx.update(userRef, { walletBalancePkr: refunded, updatedAt: serverTimestamp() });
-        const txPayload = {
-          userId: req.userId,
-          type: "withdrawal_refund",
-          direction: "credit",
-          amountPkr: Number(req.amountPkr),
-          title: "Withdrawal Refunded",
-          subtitle: note.slice(0, 150),
-          referenceId: req.id,
-          status: "completed",
-          balanceAfterPkr: refunded,
-          createdAt: serverTimestamp()
-        };
-        tx.set(txRef, txPayload);
-        tx.set(doc(db, "adminTransactions", txRef.id), {
-          ...txPayload,
-          inGameName: req.inGameName || "",
-          userEmail: req.userEmail || ""
-        });
+        showToast(approve ? "Withdrawal marked paid!" : "Withdrawal rejected & refunded.");
+      } catch (err) {
+        showToast(err.message, true);
       }
-    });
-    showToast(approve ? "Withdrawal marked paid!" : "Withdrawal rejected & refunded.");
-  } catch (err) {
-    showToast(err.message, true);
-  }
+    }
+  });
 }
 
 function openTournamentEditorModal(existing) {
@@ -1981,7 +2075,7 @@ function openScorePlayerModal(tourney, reg) {
           tx.set(doc(db, "adminTransactions", prizeTxRef.id), {
             ...prizePayload,
             inGameName: reg.inGameName || "",
-            userEmail: ""
+            userEmail: userSnap?.data()?.email || ""
           });
         }
       });
