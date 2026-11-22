@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -407,7 +408,10 @@ fun HomeScreen(
                         Intent.ACTION_VIEW,
                         Uri.parse("https://wa.me/$waNumber?text=Hi%20Gamer%20Zone%20PK%20Support!")
                     )
-                    context.startActivity(intent)
+                    runCatching { context.startActivity(intent) }
+                        .onFailure {
+                            Toast.makeText(context, "No browser or WhatsApp app found.", Toast.LENGTH_SHORT).show()
+                        }
                 },
                 modifier = Modifier.testTag("home_whatsapp_support")
             ) {

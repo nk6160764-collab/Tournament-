@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -302,10 +304,12 @@ private fun ProfileManagementSection(
     var ffUid by remember(profile.freeFireUid) { mutableStateOf(profile.freeFireUid) }
     var teamName by remember(profile.teamName) { mutableStateOf(profile.teamName) }
     var whatsapp by remember(profile.whatsappNumber) { mutableStateOf(profile.whatsappNumber) }
+    var profileError by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
         contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.imePadding()
     ) {
         item {
             Row(
@@ -383,9 +387,40 @@ private fun ProfileManagementSection(
                     )
                 }
 
+                if (profileError != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = profileError ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CrimsonLive
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(14.dp))
                 Button(
-                    onClick = { onUpdateProfile(displayName, ign, ffUid, teamName, whatsapp) },
+                    onClick = {
+                        val cleanDisplay = displayName.trim()
+                        val cleanIgn = ign.trim()
+                        val cleanUid = ffUid.trim()
+                        val cleanTeam = teamName.trim()
+                        val cleanWa = whatsapp.trim()
+                        when {
+                            cleanDisplay.isEmpty() || cleanDisplay.length > 60 ->
+                                profileError = "Display name must be 1-60 characters."
+                            cleanIgn.length !in 2..40 ->
+                                profileError = "In-Game Name must be 2-40 characters."
+                            cleanUid.length !in 4..20 ->
+                                profileError = "Free Fire UID must be 4-20 digits."
+                            cleanTeam.length !in 1..40 ->
+                                profileError = "Squad / Clan name must be 1-40 characters."
+                            cleanWa.length > 25 ->
+                                profileError = "WhatsApp number must be at most 25 characters."
+                            else -> {
+                                profileError = null
+                                onUpdateProfile(cleanDisplay, cleanIgn, cleanUid, cleanTeam, cleanWa)
+                            }
+                        }
+                    },
                     enabled = !isBusy,
                     colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = PitchBlack),
                     shape = RoundedCornerShape(12.dp),
@@ -495,7 +530,10 @@ private fun SupportAndInfoSection() {
                             Intent.ACTION_VIEW,
                             Uri.parse("https://wa.me/$waNumber?text=Assalam%20o%20Alaikum%20Gamer%20Zone%20PK%20Support!")
                         )
-                        context.startActivity(intent)
+                        runCatching { context.startActivity(intent) }
+                            .onFailure {
+                                Toast.makeText(context, "No browser or WhatsApp app found.", Toast.LENGTH_SHORT).show()
+                            }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = PitchBlack),
                     modifier = Modifier
@@ -526,7 +564,10 @@ private fun SupportAndInfoSection() {
                 OutlinedButton(
                     onClick = {
                         val emailIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$supportEmail"))
-                        context.startActivity(emailIntent)
+                        runCatching { context.startActivity(emailIntent) }
+                            .onFailure {
+                                Toast.makeText(context, "No email app installed on this device.", Toast.LENGTH_SHORT).show()
+                            }
                     },
                     modifier = Modifier
                         .fillMaxWidth()

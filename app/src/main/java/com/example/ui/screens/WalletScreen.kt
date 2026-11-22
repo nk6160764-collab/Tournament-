@@ -898,7 +898,7 @@ fun AddMoneyDialog(
 
                 OutlinedTextField(
                     value = transactionId,
-                    onValueChange = { transactionId = it },
+                    onValueChange = { transactionId = it.take(64) },
                     label = { Text("Transaction ID (TID) *") },
                     singleLine = true,
                     modifier = Modifier
@@ -908,7 +908,7 @@ fun AddMoneyDialog(
 
                 OutlinedTextField(
                     value = senderNumber,
-                    onValueChange = { senderNumber = it },
+                    onValueChange = { senderNumber = it.take(25) },
                     label = { Text("Your Sender Mobile Number (Optional)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
@@ -980,6 +980,8 @@ fun AddMoneyDialog(
                     when {
                         amt < WalletLimits.MIN_DEPOSIT_PKR ->
                             localError = "Minimum deposit is ${WalletLimits.MIN_DEPOSIT_PKR} PKR."
+                        amt > WalletLimits.MAX_DEPOSIT_PKR ->
+                            localError = "Maximum single deposit is ${WalletLimits.MAX_DEPOSIT_PKR} PKR."
                         cleanTid.length < 4 ->
                             localError = "Enter a valid Transaction ID (min 4 characters)."
                         b64.length < 20 ->
@@ -1097,7 +1099,7 @@ fun WithdrawMoneyDialog(
 
                 OutlinedTextField(
                     value = accountNumber,
-                    onValueChange = { accountNumber = it },
+                    onValueChange = { accountNumber = it.take(20) },
                     label = { Text("Your ${selectedMethod.displayName} Number *") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
@@ -1108,7 +1110,7 @@ fun WithdrawMoneyDialog(
 
                 OutlinedTextField(
                     value = accountTitle,
-                    onValueChange = { accountTitle = it },
+                    onValueChange = { accountTitle = it.take(60) },
                     label = { Text("Account Holder Name *") },
                     singleLine = true,
                     modifier = Modifier
@@ -1134,6 +1136,8 @@ fun WithdrawMoneyDialog(
                     when {
                         amt < WalletLimits.MIN_WITHDRAWAL_PKR ->
                             localError = "Minimum withdrawal amount is ${WalletLimits.MIN_WITHDRAWAL_PKR} PKR."
+                        amt > WalletLimits.MAX_WITHDRAWAL_PKR ->
+                            localError = "Maximum single withdrawal is ${WalletLimits.MAX_WITHDRAWAL_PKR} PKR."
                         amt > availableBalance ->
                             localError = "Insufficient balance ($availableBalance PKR available)."
                         cleanAcc.length < 7 ->

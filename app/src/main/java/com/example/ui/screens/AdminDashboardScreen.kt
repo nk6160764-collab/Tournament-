@@ -851,11 +851,16 @@ private fun AdminNoteConfirmDialog(
         containerColor = CyberSurface,
         title = { Text(title, color = confirmColor) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                 OutlinedTextField(
                     value = note,
-                    onValueChange = { note = it },
+                    onValueChange = { note = it.take(300) },
                     label = { Text("Admin Note / Reference") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -1257,7 +1262,10 @@ private fun TournamentEditorDialog(
                         roomPass
                     )
                 },
-                enabled = title.trim().length >= 3 && mapName.trim().length >= 2,
+                enabled = title.trim().length in 3..80 &&
+                    mapName.trim().length in 2..40 &&
+                    matchTime.trim().length in 2..60 &&
+                    rules.trim().length in 5..2000,
                 colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = PitchBlack)
             ) {
                 Text("Save")
@@ -1287,7 +1295,12 @@ private fun PublishScoreDialog(
         containerColor = CyberSurface,
         title = { Text("Publish Score: ${registration.inGameName}", color = GoldTrophy) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 OutlinedTextField(
                     value = placement,
                     onValueChange = { placement = it.filter { c -> c.isDigit() } },

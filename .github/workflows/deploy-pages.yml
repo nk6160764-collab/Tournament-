@@ -34,13 +34,23 @@ jobs:
       - name: Set up Android SDK & Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build Android APK
-        run: gradle :app:assembleDebug
-
-      - name: Package APK into Website Downloads
+      - name: Build Signed Release APK (or Debug Fallback)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           mkdir -p website/downloads
-          cp app/build/outputs/apk/debug/app-debug.apk website/downloads/gamerzone-pk.apk
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+            export KEYSTORE_PATH="$PWD/my-upload-key.jks"
+            gradle :app:assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk website/downloads/gamerzone-pk.apk
+            rm -f my-upload-key.jks
+          else
+            gradle :app:assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk website/downloads/gamerzone-pk.apk
+          fi
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5

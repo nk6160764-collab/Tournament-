@@ -237,6 +237,7 @@ fun TournamentDetailScreen(
     tournament: Tournament,
     profile: PlayerProfile,
     isAdmin: Boolean,
+    isInitiallyJoined: Boolean = false,
     registrationsState: UiState<List<TournamentRegistration>>,
     isBusy: Boolean,
     onBack: () -> Unit,
@@ -249,10 +250,10 @@ fun TournamentDetailScreen(
     var showJoinConfirm by remember { mutableStateOf(false) }
 
     val registrations = (registrationsState as? UiState.Success)?.data.orEmpty()
-    val isJoined = registrations.any { it.userId == profile.uid }
+    val isJoined = isInitiallyJoined || registrations.any { it.userId == profile.uid }
     val status = TournamentStatus.fromRaw(tournament.status)
     val isFull = tournament.registeredCount >= tournament.totalSlots
-    val canJoin = !isJoined && !isFull && status == TournamentStatus.UPCOMING
+    val canJoin = !isJoined && !isFull && status == TournamentStatus.UPCOMING && registrationsState !is UiState.Loading
     val hasEnoughBalance = profile.walletBalancePkr >= tournament.entryFeePkr
     val progress = if (tournament.totalSlots > 0) {
         (tournament.registeredCount.toFloat() / tournament.totalSlots.toFloat()).coerceIn(0f, 1f)

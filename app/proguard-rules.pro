@@ -7,3 +7,12 @@
 -keep @androidx.annotation.Keep class * {
     *;
 }
+
+# Firebase & Google Credential Manager release safety
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+-keep class androidx.credentials.** { *; }
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

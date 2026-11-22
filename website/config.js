@@ -6,8 +6,8 @@ export const GAMERZONE_CONFIG = {
   apkDownloadUrl: "./downloads/gamerzone-pk.apk",
   apkFileName: "GamerZonePK-v1.0.apk",
   apkVersion: "v1.0",
-  apkSizeLabel: "27.1 MB",
-  minAndroid: "Android 7.0+",
+  apkSizeLabel: "19.3 MB",
+  minAndroid: "Android 10+ (API 24+)",
   whatsappNumber: "923001234567",
   supportEmail: "support@gamerzonepk.com",
   paymentMethods: {

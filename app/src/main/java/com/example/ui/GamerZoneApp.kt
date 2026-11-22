@@ -567,6 +567,7 @@ private fun AuthenticatedArenaShell(
                                                 tournament = detailTournament,
                                                 profile = profile,
                                                 isAdmin = isAdmin,
+                                                isInitiallyJoined = joinedIds.contains(detailTournament.id),
                                                 registrationsState = selectedRegistrationsState,
                                                 isBusy = isBusy,
                                                 onBack = { detailTournamentId = null },
