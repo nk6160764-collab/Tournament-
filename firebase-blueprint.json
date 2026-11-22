@@ -1,0 +1,229 @@
+{
+  "entities": {
+    "AdminGrant": {
+      "title": "AdminGrant",
+      "description": "Explicit admin privilege grant keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID of admin user" },
+        "email": { "type": "string", "description": "Verified email of admin user" },
+        "grantedBy": { "type": "string", "description": "UID of granting admin" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "email", "grantedBy", "createdAt"]
+    },
+    "PlayerProfile": {
+      "title": "PlayerProfile",
+      "description": "Private authenticated player account containing PII, Free Fire UID, and role.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Full display name" },
+        "email": { "type": "string", "description": "Account email" },
+        "inGameName": { "type": "string", "description": "Free Fire In-Game Name (IGN)" },
+        "freeFireUid": { "type": "string", "description": "Numeric Free Fire UID" },
+        "whatsappNumber": { "type": "string", "description": "Optional WhatsApp contact" },
+        "teamName": { "type": "string", "description": "Squad or guild name" },
+        "role": { "type": "string", "enum": ["player", "admin"], "description": "Account role" },
+        "matchesPlayed": { "type": "integer", "description": "Total matches played" },
+        "totalWins": { "type": "integer", "description": "Total tournament wins" },
+        "matchPoints": { "type": "integer", "description": "Placement match points" },
+        "killPoints": { "type": "integer", "description": "Elimination kill points" },
+        "totalPoints": { "type": "integer", "description": "Combined leaderboard points" },
+        "walletBalancePkr": { "type": "integer", "description": "Available PKR wallet balance" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "displayName", "email", "inGameName", "freeFireUid", "teamName", "role", "matchesPlayed", "totalWins", "matchPoints", "killPoints", "totalPoints", "walletBalancePkr", "createdAt", "updatedAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Publicly visible player and team ranking entry without PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "inGameName": { "type": "string", "description": "Free Fire IGN" },
+        "freeFireUid": { "type": "string", "description": "Free Fire numeric UID" },
+        "teamName": { "type": "string", "description": "Squad or clan name" },
+        "matchesPlayed": { "type": "integer", "description": "Matches played" },
+        "totalWins": { "type": "integer", "description": "Total tournament victories" },
+        "matchPoints": { "type": "integer", "description": "Placement points" },
+        "killPoints": { "type": "integer", "description": "Kill points" },
+        "totalPoints": { "type": "integer", "description": "Sum of match and kill points" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "inGameName", "freeFireUid", "teamName", "matchesPlayed", "totalWins", "matchPoints", "killPoints", "totalPoints", "updatedAt"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Free Fire esports tournament managed by admins with atomic player slot registration.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Tournament title" },
+        "mode": { "type": "string", "enum": ["Solo", "Duo", "Squad", "Clash Squad", "Battle Royale"] },
+        "status": { "type": "string", "enum": ["upcoming", "live", "completed"] },
+        "mapName": { "type": "string", "description": "Bermuda, Purgatory, Kalahari, Alpine, Nexterra" },
+        "entryFeePkr": { "type": "integer", "description": "Entry fee in PKR" },
+        "prizePoolPkr": { "type": "integer", "description": "Total prize pool in PKR" },
+        "firstPrizePkr": { "type": "integer", "description": "1st place prize in PKR" },
+        "secondPrizePkr": { "type": "integer", "description": "2nd place prize in PKR" },
+        "thirdPrizePkr": { "type": "integer", "description": "3rd place prize in PKR" },
+        "matchTime": { "type": "string", "description": "Scheduled match date and time" },
+        "totalSlots": { "type": "integer", "description": "Maximum allowed slots" },
+        "registeredCount": { "type": "integer", "description": "Current registered slots count" },
+        "rules": { "type": "string", "description": "Tournament rules text" },
+        "roomId": { "type": "string", "description": "Custom room ID (optional)" },
+        "roomPassword": { "type": "string", "description": "Custom room password (optional)" },
+        "winnerName": { "type": "string", "description": "Published winner IGN or team" },
+        "winnerUid": { "type": "string", "description": "Published winner UID" },
+        "createdBy": { "type": "string", "description": "Admin UID" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "mode", "status", "mapName", "entryFeePkr", "prizePoolPkr", "firstPrizePkr", "secondPrizePkr", "thirdPrizePkr", "matchTime", "totalSlots", "registeredCount", "rules", "createdBy", "createdAt", "updatedAt"]
+    },
+    "TournamentRegistration": {
+      "title": "TournamentRegistration",
+      "description": "Player registration and match score record for a specific tournament.",
+      "type": "object",
+      "properties": {
+        "tournamentId": { "type": "string" },
+        "tournamentTitle": { "type": "string" },
+        "tournamentMode": { "type": "string" },
+        "tournamentStatus": { "type": "string", "enum": ["upcoming", "live", "completed"] },
+        "matchTime": { "type": "string" },
+        "mapName": { "type": "string" },
+        "entryFeePkr": { "type": "integer" },
+        "prizePoolPkr": { "type": "integer" },
+        "userId": { "type": "string" },
+        "inGameName": { "type": "string" },
+        "freeFireUid": { "type": "string" },
+        "teamName": { "type": "string" },
+        "slotNumber": { "type": "integer" },
+        "matchPoints": { "type": "integer" },
+        "killPoints": { "type": "integer" },
+        "totalPoints": { "type": "integer" },
+        "placement": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tournamentId", "tournamentTitle", "tournamentMode", "tournamentStatus", "matchTime", "mapName", "entryFeePkr", "prizePoolPkr", "userId", "inGameName", "freeFireUid", "teamName", "slotNumber", "matchPoints", "killPoints", "totalPoints", "placement", "createdAt", "updatedAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Platform-wide notifications, winner announcements, and esports alerts.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "category": { "type": "string", "enum": ["tournament", "winner", "alert", "rules"] },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "category", "createdBy", "createdAt", "updatedAt"]
+    },
+    "DepositRequest": {
+      "title": "DepositRequest",
+      "description": "Manual EasyPaisa/JazzCash wallet deposit request with payment proof submitted for admin verification.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "inGameName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "amountPkr": { "type": "integer" },
+        "paymentMethod": { "type": "string", "enum": ["easypaisa", "jazzcash"] },
+        "receiverAccountNumber": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "senderNumber": { "type": "string" },
+        "screenshotBase64": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "adminNote": { "type": "string" },
+        "reviewedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "inGameName", "userEmail", "amountPkr", "paymentMethod", "receiverAccountNumber", "transactionId", "screenshotBase64", "status", "createdAt", "updatedAt"]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "Player wallet withdrawal request to EasyPaisa or JazzCash verified by admin.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "inGameName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "amountPkr": { "type": "integer" },
+        "paymentMethod": { "type": "string", "enum": ["easypaisa", "jazzcash"] },
+        "accountNumber": { "type": "string" },
+        "accountTitle": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "adminNote": { "type": "string" },
+        "reviewedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "inGameName", "userEmail", "amountPkr", "paymentMethod", "accountNumber", "accountTitle", "status", "createdAt", "updatedAt"]
+    },
+    "WalletTransaction": {
+      "title": "WalletTransaction",
+      "description": "Immutable wallet ledger entry for deposits, tournament entries, withdrawals, refunds, and prize payouts.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "tournament_entry", "withdrawal", "withdrawal_refund", "prize_payout"] },
+        "direction": { "type": "string", "enum": ["credit", "debit"] },
+        "amountPkr": { "type": "integer" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "referenceId": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "pending", "rejected"] },
+        "balanceAfterPkr": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "direction", "amountPkr", "title", "subtitle", "referenceId", "status", "balanceAfterPkr", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminGrant" },
+      "description": "Explicit admin role grants verified by security rules"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/PlayerProfile" },
+      "description": "Private player profile with PII, Free Fire UID, and admin-managed stats"
+    },
+    "/users/{userId}/registrations/{tournamentId}": {
+      "schema": { "$ref": "#/entities/TournamentRegistration" },
+      "description": "Player-scoped mirror of tournament registrations and match history"
+    },
+    "/leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Public competitive player and team leaderboard without PII"
+    },
+    "/tournaments/{tournamentId}": {
+      "schema": { "$ref": "#/entities/Tournament" },
+      "description": "Free Fire tournaments across Solo, Duo, Squad, Clash Squad, and Battle Royale"
+    },
+    "/tournaments/{tournamentId}/registrations/{userId}": {
+      "schema": { "$ref": "#/entities/TournamentRegistration" },
+      "description": "Registered roster and match results per tournament"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Official GamerZone PK announcements and winner notifications"
+    },
+    "/users/{userId}/walletTransactions/{txId}": {
+      "schema": { "$ref": "#/entities/WalletTransaction" },
+      "description": "Player wallet ledger history"
+    },
+    "/depositRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/DepositRequest" },
+      "description": "EasyPaisa and JazzCash deposit verification requests"
+    },
+    "/withdrawalRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/WithdrawalRequest" },
+      "description": "EasyPaisa and JazzCash withdrawal payout requests"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "GamerZone PK",
+  "description": "Free Fire Esports Tournament Android App with Real-Time Matches, Leaderboards & Admin Controls",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

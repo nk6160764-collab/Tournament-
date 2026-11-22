@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">GamerZone PK</string>
+    <string name="brand_title">GAMERZONE PK</string>
+    <string name="brand_tagline">PAKISTAN\'S PREMIER FREE FIRE ESPORTS ARENA</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="complete_profile_title">Player Registration</string>
+    <string name="complete_profile_subtitle">Enter your Free Fire credentials to join tournaments &amp; earn leaderboard points.</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_tournaments">Matches</string>
+    <string name="nav_leaderboard">Ranks</string>
+    <string name="nav_dashboard">Player</string>
+    <string name="nav_admin">Admin</string>
+    <string name="cd_banner_image">Gamer Zone PK Neon Esports Hero Banner</string>
+    <string name="whatsapp_support_number">923001234567</string>
+    <string name="support_email">support@gamerzonepk.com</string>
+</resources>

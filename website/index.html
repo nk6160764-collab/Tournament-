@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GamerZone PK — Free Fire Esports Tournaments & Direct APK</title>
+  <meta name="description" content="Official GamerZone PK Free Fire esports platform. Download the free Android APK directly, join Solo/Duo/Squad/Clash Squad tournaments, manage EasyPaisa & JazzCash wallet, and compete for PKR prizes." />
+  <link rel="icon" type="image/png" href="./assets/gamerzone-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Russo+One&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Sticky Topbar -->
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a href="#top" class="brand">
+        <img src="./assets/gamerzone-icon.png" alt="GamerZone PK Icon" class="brand-logo" />
+        <div>
+          <div class="brand-title">GAMERZONE PK</div>
+          <div class="brand-sub">Pakistan Free Fire Esports</div>
+        </div>
+      </a>
+
+      <div class="topbar-actions">
+        <button id="headerWalletPill" class="wallet-pill hidden" type="button" title="Open My Wallet">
+          <span>Wallet:</span>
+          <span id="headerWalletBalance">0 PKR</span>
+        </button>
+        <button id="headerAuthBtn" class="btn btn-outline btn-sm" type="button">Sign In with Google</button>
+        <a id="headerDownloadBtn" class="btn btn-primary btn-sm" href="./downloads/gamerzone-pk.apk" download="GamerZonePK-v1.0.apk">
+          Download APK
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top" class="container">
+    <!-- Hero Banner & Direct APK Download -->
+    <section class="hero">
+      <div class="hero-card">
+        <div class="hero-content">
+          <div class="badge-row">
+            <span class="badge badge-green">Direct Android APK • 100% Free</span>
+            <span class="badge badge-cyan">PKR Prize Pools</span>
+            <span class="badge badge-gold">EasyPaisa & JazzCash</span>
+          </div>
+
+          <h1 class="hero-title">PAKISTAN'S PREMIER <span>FREE FIRE</span> TOURNAMENT ARENA</h1>
+          <p class="hero-desc">
+            Compete in daily Solo, Duo, Squad, Clash Squad & Battle Royale tournaments.
+            Download the official GamerZone PK Android app directly—no third-party app store required—or manage matches, wallet, and admin controls right here on the web.
+          </p>
+
+          <div class="hero-ctas">
+            <a id="heroDownloadBtn" class="btn btn-primary" href="./downloads/gamerzone-pk.apk" download="GamerZonePK-v1.0.apk">
+              ⬇ Download Android APK (v1.0)
+            </a>
+            <button id="heroInstallHelpBtn" class="btn btn-ghost" type="button">How to Install APK</button>
+            <a href="#arena" class="btn btn-cyan">Open Live Web Arena</a>
+          </div>
+
+          <div class="apk-meta">
+            <span>📦 Version: <strong id="metaVersion">v1.0</strong></span>
+            <span>💾 Size: <strong id="metaSize">27.1 MB</strong></span>
+            <span>📱 Compatibility: <strong id="metaAndroid">Android 7.0+</strong></span>
+            <span>🛡️ Direct Official Build</span>
+          </div>
+        </div>
+
+        <div class="hero-media">
+          <img src="./assets/gamerzone-banner.jpg" alt="GamerZone PK Free Fire Esports Championship Banner" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick 3-Step Install Guide -->
+    <section class="section">
+      <div class="grid grid-3">
+        <div class="card card-neon">
+          <div class="badge badge-green">Step 1</div>
+          <h3 style="margin-top:8px;">Download Official APK</h3>
+          <p class="section-sub">Tap the <strong>Download Android APK</strong> button above to save <code>GamerZonePK-v1.0.apk</code> directly onto your Android phone.</p>
+        </div>
+        <div class="card card-cyan">
+          <div class="badge badge-cyan">Step 2</div>
+          <h3 style="margin-top:8px;">Allow Unknown Sources</h3>
+          <p class="section-sub">Open the downloaded file, tap <strong>Settings</strong> if prompted, and toggle <strong>Allow from this source</strong> for your browser.</p>
+        </div>
+        <div class="card card-gold">
+          <div class="badge badge-gold">Step 3</div>
+          <h3 style="margin-top:8px;">Sign In & Join Matches</h3>
+          <p class="section-sub">Sign in with Google, enter your Free Fire UID & IGN, top up via EasyPaisa or JazzCash, and book your slot.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Interactive Platform (Synced with Android App via Firebase Firestore) -->
+    <section id="arena" class="section">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">LIVE WEB ARENA, WALLET & ADMIN PORTAL</h2>
+          <p class="section-sub">Real-time sync with the GamerZone PK Android app via Firebase Firestore.</p>
+        </div>
+        <div id="signedInUserMeta" class="badge badge-green hidden"></div>
+      </div>
+
+      <!-- Auth Required State -->
+      <div id="authGateCard" class="card card-neon">
+        <div class="row-between">
+          <div style="max-width: 620px;">
+            <div class="badge badge-green">Player & Admin Sign-In</div>
+            <h3 style="margin-top:8px; font-size:1.3rem;">Sign in with Google to Unlock Live Tournaments, Wallet & Admin Controls</h3>
+            <p class="section-sub" style="margin-top:6px;">
+              Your account, Free Fire UID, EasyPaisa/JazzCash wallet balance, tournament registrations, and admin verification tools sync seamlessly between this website and the Android APK.
+            </p>
+          </div>
+          <button id="gateSignInBtn" class="btn btn-primary" type="button">Sign In with Google</button>
+        </div>
+      </div>
+
+      <!-- Profile Onboarding State -->
+      <div id="onboardingCard" class="card card-cyan hidden">
+        <div class="badge badge-cyan">Player Registration</div>
+        <h3 style="margin-top:8px;">Complete Your Free Fire Profile</h3>
+        <p class="section-sub" style="margin-bottom:14px;">Enter your Free Fire credentials once to join tournaments and track leaderboard stats.</p>
+        <form id="onboardingForm" class="grid grid-2">
+          <div class="field">
+            <label for="onbIgn">Free Fire In-Game Name (IGN) *</label>
+            <input id="onbIgn" class="input" required minlength="2" maxlength="40" placeholder="e.g. PK_HUNTER_FF" />
+          </div>
+          <div class="field">
+            <label for="onbUid">Free Fire UID *</label>
+            <input id="onbUid" class="input" required minlength="4" maxlength="20" inputmode="numeric" placeholder="e.g. 2145908712" />
+          </div>
+          <div class="field">
+            <label for="onbTeam">Squad / Clan Name</label>
+            <input id="onbTeam" class="input" maxlength="40" placeholder="e.g. Karachi Kings" />
+          </div>
+          <div class="field">
+            <label for="onbWa">WhatsApp Number (Optional)</label>
+            <input id="onbWa" class="input" maxlength="25" placeholder="03XX-XXXXXXX" />
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <button class="btn btn-primary" type="submit">Save Profile & Enter Arena</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Main Authenticated Workspace -->
+      <div id="arenaWorkspace" class="hidden">
+        <div class="arena-nav">
+          <button class="tab-btn active" data-tab="tournaments" type="button">Tournaments</button>
+          <button class="tab-btn" data-tab="wallet" type="button">My Wallet</button>
+          <button class="tab-btn" data-tab="leaderboard" type="button">Leaderboard</button>
+          <button class="tab-btn" data-tab="player" type="button">Player Dashboard</button>
+          <button id="adminNavTab" class="tab-btn hidden" data-tab="admin" type="button">Admin Dashboard</button>
+        </div>
+
+        <!-- TAB: TOURNAMENTS -->
+        <div id="tab-tournaments" class="tab-panel">
+          <div class="chip-row" id="modeFilters">
+            <button class="chip active" data-mode="All" type="button">All Modes</button>
+            <button class="chip" data-mode="Solo" type="button">Solo</button>
+            <button class="chip" data-mode="Duo" type="button">Duo</button>
+            <button class="chip" data-mode="Squad" type="button">Squad</button>
+            <button class="chip" data-mode="Clash Squad" type="button">Clash Squad</button>
+            <button class="chip" data-mode="Battle Royale" type="button">Battle Royale</button>
+          </div>
+          <div class="chip-row" id="statusFilters">
+            <button class="chip active" data-status="all" type="button">All Status</button>
+            <button class="chip" data-status="upcoming" type="button">Upcoming</button>
+            <button class="chip" data-status="live" type="button">Live</button>
+            <button class="chip" data-status="completed" type="button">Completed</button>
+          </div>
+          <div id="tournamentsList" class="grid grid-2"></div>
+        </div>
+
+        <!-- TAB: WALLET -->
+        <div id="tab-wallet" class="tab-panel hidden">
+          <div class="card card-neon" style="margin-bottom:16px;">
+            <div class="row-between">
+              <div>
+                <div class="badge badge-green">Available PKR Balance</div>
+                <div id="walletHeroBalance" class="kpi-value" style="margin-top:6px;">0 PKR</div>
+                <div class="section-sub">Use wallet balance for instant tournament entry or withdraw winnings via EasyPaisa / JazzCash.</div>
+              </div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button id="openAddMoneyBtn" class="btn btn-primary" type="button">+ Add Money</button>
+                <button id="openWithdrawBtn" class="btn btn-cyan" type="button">Withdraw Money</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="chip-row" id="walletSubTabs">
+            <button class="chip active" data-wtab="transactions" type="button">Transactions</button>
+            <button class="chip" data-wtab="deposits" type="button">Deposit History</button>
+            <button class="chip" data-wtab="withdrawals" type="button">Withdrawal History</button>
+            <button class="chip" data-wtab="methods" type="button">Payment Methods</button>
+          </div>
+
+          <div id="walletFeeFilterRow" class="chip-row">
+            <button class="chip active" data-txfilter="all" type="button">All Activity</button>
+            <button class="chip" data-txfilter="tournament_entry" type="button">Tournament Fees</button>
+          </div>
+
+          <div id="walletContent" class="list-stack"></div>
+        </div>
+
+        <!-- TAB: LEADERBOARD -->
+        <div id="tab-leaderboard" class="tab-panel hidden">
+          <div class="chip-row" id="lbSwitch">
+            <button class="chip active" data-lb="players" type="button">Player Rankings</button>
+            <button class="chip" data-lb="teams" type="button">Team / Squad Rankings</button>
+          </div>
+          <div id="leaderboardList" class="list-stack"></div>
+        </div>
+
+        <!-- TAB: PLAYER DASHBOARD -->
+        <div id="tab-player" class="tab-panel hidden">
+          <div class="grid grid-3" style="margin-bottom:14px;">
+            <div class="card"><div class="section-sub">Matches Played</div><div id="statMatches" class="kpi-value">0</div></div>
+            <div class="card"><div class="section-sub">Total Wins</div><div id="statWins" class="kpi-value" style="color:var(--gold-trophy);">0</div></div>
+            <div class="card"><div class="section-sub">Total Points</div><div id="statPoints" class="kpi-value" style="color:var(--cyan-accent);">0</div></div>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="card card-neon">
+              <h3 style="margin-bottom:10px;">Edit Player Profile</h3>
+              <form id="profileUpdateForm">
+                <div class="field"><label for="profDisplay">Display Name</label><input id="profDisplay" class="input" required maxlength="60" /></div>
+                <div class="field"><label for="profIgn">Free Fire IGN</label><input id="profIgn" class="input" required minlength="2" maxlength="40" /></div>
+                <div class="field"><label for="profUid">Free Fire UID</label><input id="profUid" class="input" required minlength="4" maxlength="20" /></div>
+                <div class="field"><label for="profTeam">Squad / Clan Name</label><input id="profTeam" class="input" required maxlength="40" /></div>
+                <div class="field"><label for="profWa">WhatsApp Number</label><input id="profWa" class="input" maxlength="25" /></div>
+                <div class="row-between">
+                  <button class="btn btn-primary" type="submit">Save Profile</button>
+                  <button id="signOutBtn" class="btn btn-danger" type="button">Sign Out</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="list-stack">
+              <div class="card">
+                <h3 style="margin-bottom:10px;">My Registered Matches</h3>
+                <div id="myMatchesList" class="list-stack"></div>
+              </div>
+              <div class="card">
+                <h3 style="margin-bottom:10px;">Announcements & Alerts</h3>
+                <div id="announcementsList" class="list-stack"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: ADMIN DASHBOARD -->
+        <div id="tab-admin" class="tab-panel hidden">
+          <div class="chip-row" id="adminSubTabs">
+            <button class="chip active" data-atab="wallet" type="button">Wallet Verification</button>
+            <button class="chip" data-atab="tournaments" type="button">Manage Tournaments</button>
+            <button class="chip" data-atab="results" type="button">Results & Prizes</button>
+            <button class="chip" data-atab="announcements" type="button">Announcements</button>
+          </div>
+          <div id="adminContent"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Official Payment Methods & Support -->
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">OFFICIAL PAYMENT ACCOUNTS & SUPPORT</h2>
+          <p class="section-sub">Manual verification protects every player's PKR deposits and withdrawals.</p>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card card-neon">
+          <div class="badge badge-green">EasyPaisa Official</div>
+          <h3 class="mono" style="margin-top:8px; font-size:1.5rem; color:var(--neon-green);">03489674834</h3>
+          <p class="section-sub" style="margin:6px 0 12px;">Send PKR deposits to this EasyPaisa number, then submit your Transaction ID & screenshot in My Wallet.</p>
+          <button class="btn btn-outline btn-sm copy-btn" data-copy="03489674834" type="button">Copy EasyPaisa Number</button>
+        </div>
+        <div class="card card-cyan">
+          <div class="badge badge-cyan">JazzCash Official</div>
+          <h3 class="mono" style="margin-top:8px; font-size:1.5rem; color:var(--cyan-accent);">03406690336</h3>
+          <p class="section-sub" style="margin:6px 0 12px;">Send PKR deposits to this JazzCash number, then submit your Transaction ID & screenshot in My Wallet.</p>
+          <button class="btn btn-cyan btn-sm copy-btn" data-copy="03406690336" type="button">Copy JazzCash Number</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>Rules & Fair Play</h3>
+          <ul style="margin-top:8px; padding-left:18px; color:var(--text-secondary); display:grid; gap:6px;">
+            <li>Mobile devices only — emulators, scripts, or third-party tools result in permanent disqualification.</li>
+            <li>Your registered Free Fire UID and IGN must match the account joining the custom room.</li>
+            <li>Enter custom rooms at least 10 minutes before match time using the Room ID & Password.</li>
+            <li>No teaming in Solo/Duo or toxic behavior; Admin decisions on match scoring are final.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>WhatsApp & Email Support</h3>
+          <p class="section-sub" style="margin:8px 0 12px;">
+            Need help with APK installation, custom room IDs, or PKR deposit/withdrawal verification? Reach us daily 10:00 AM – 11:00 PM PKT.
+          </p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a class="btn btn-primary btn-sm" href="https://wa.me/923001234567?text=Assalam%20o%20Alaikum%20GamerZone%20PK%20Support!" target="_blank" rel="noopener">WhatsApp Support</a>
+            <a class="btn btn-ghost btn-sm" href="mailto:support@gamerzonepk.com">support@gamerzonepk.com</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Sticky Mobile APK Download Bar -->
+  <div class="mobile-apk-bar">
+    <div>
+      <div style="font-weight:700; color:var(--neon-green); font-size:0.9rem;">GamerZone PK APK (v1.0)</div>
+      <div style="font-size:0.75rem; color:var(--text-secondary);">Direct Free Download • 27.1 MB</div>
+    </div>
+    <a class="btn btn-primary btn-sm" href="./downloads/gamerzone-pk.apk" download="GamerZonePK-v1.0.apk">⬇ Download APK</a>
+  </div>
+
+  <!-- Generic Modal Container -->
+  <div id="modalBackdrop" class="modal-backdrop hidden">
+    <div id="modalBox" class="modal"></div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
