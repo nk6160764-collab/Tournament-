@@ -135,6 +135,7 @@
         "paymentMethod": { "type": "string", "enum": ["easypaisa", "jazzcash"] },
         "receiverAccountNumber": { "type": "string" },
         "transactionId": { "type": "string" },
+        "tidKey": { "type": "string" },
         "senderNumber": { "type": "string" },
         "screenshotBase64": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
@@ -143,7 +144,20 @@
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "inGameName", "userEmail", "amountPkr", "paymentMethod", "receiverAccountNumber", "transactionId", "screenshotBase64", "status", "createdAt", "updatedAt"]
+      "required": ["userId", "inGameName", "userEmail", "amountPkr", "paymentMethod", "receiverAccountNumber", "transactionId", "tidKey", "screenshotBase64", "status", "createdAt", "updatedAt"]
+    },
+    "UsedTransactionId": {
+      "title": "UsedTransactionId",
+      "description": "Deduplication lock document preventing duplicate deposit Transaction ID submissions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "depositId": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "paymentMethod": { "type": "string", "enum": ["easypaisa", "jazzcash"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "depositId", "transactionId", "paymentMethod", "createdAt"]
     },
     "WithdrawalRequest": {
       "title": "WithdrawalRequest",
@@ -182,6 +196,26 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "type", "direction", "amountPkr", "title", "subtitle", "referenceId", "status", "balanceAfterPkr", "createdAt"]
+    },
+    "AdminWalletTransaction": {
+      "title": "AdminWalletTransaction",
+      "description": "Global immutable wallet audit ledger readable only by Admins.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "inGameName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "tournament_entry", "withdrawal", "withdrawal_refund", "prize_payout"] },
+        "direction": { "type": "string", "enum": ["credit", "debit"] },
+        "amountPkr": { "type": "integer" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "referenceId": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "pending", "rejected"] },
+        "balanceAfterPkr": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "inGameName", "userEmail", "type", "direction", "amountPkr", "title", "subtitle", "referenceId", "status", "balanceAfterPkr", "createdAt"]
     }
   },
   "firestore": {
@@ -221,9 +255,17 @@
       "schema": { "$ref": "#/entities/DepositRequest" },
       "description": "EasyPaisa and JazzCash deposit verification requests"
     },
+    "/usedTransactionIds/{tidKey}": {
+      "schema": { "$ref": "#/entities/UsedTransactionId" },
+      "description": "Unique Transaction ID lock preventing duplicate deposits"
+    },
     "/withdrawalRequests/{requestId}": {
       "schema": { "$ref": "#/entities/WithdrawalRequest" },
       "description": "EasyPaisa and JazzCash withdrawal payout requests"
+    },
+    "/adminTransactions/{txId}": {
+      "schema": { "$ref": "#/entities/AdminWalletTransaction" },
+      "description": "Complete immutable transaction history readable by Admins"
     }
   }
 }

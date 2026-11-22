@@ -295,6 +295,7 @@ private fun AuthenticatedArenaShell(
     val myWithdrawalRequestsState by viewModel.myWithdrawalRequestsState.collectAsStateWithLifecycle()
     val allDepositRequestsState by viewModel.allDepositRequestsState.collectAsStateWithLifecycle()
     val allWithdrawalRequestsState by viewModel.allWithdrawalRequestsState.collectAsStateWithLifecycle()
+    val allAdminTransactionsState by viewModel.allAdminTransactionsState.collectAsStateWithLifecycle()
     val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -627,6 +628,7 @@ private fun AuthenticatedArenaShell(
                                                     announcementsState = announcementsState,
                                                     depositRequestsState = allDepositRequestsState,
                                                     withdrawalRequestsState = allWithdrawalRequestsState,
+                                                    allAdminTransactionsState = allAdminTransactionsState,
                                                     selectedAdminTournamentId = selectedTournamentId,
                                                     selectedRegistrationsState = selectedRegistrationsState,
                                                     isBusy = isBusy,

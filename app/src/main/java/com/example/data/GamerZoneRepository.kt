@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import com.example.R
+import com.example.model.AdminWalletTransaction
 import com.example.model.Announcement
 import com.example.model.AnnouncementCategory
 import com.example.model.DepositRequest
@@ -13,6 +14,7 @@ import com.example.model.Tournament
 import com.example.model.TournamentMode
 import com.example.model.TournamentRegistration
 import com.example.model.TournamentStatus
+import com.example.model.WalletLimits
 import com.example.model.WalletTransaction
 import com.example.model.WalletTxType
 import com.example.model.WithdrawalRequest
@@ -263,6 +265,24 @@ class GamerZoneRepository(
             }
     }
 
+    fun observeAllAdminTransactions(): Flow<List<AdminWalletTransaction>> {
+        val uid = requireUserId()
+        val path = "adminTransactions"
+        return db.collection("adminTransactions")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(
+                    AdminWalletTransaction::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                )
+            }
+            .catch { error ->
+                logStreamErrorIfActive(error, OperationType.LIST, path, uid)
+                throw error
+            }
+    }
+
     private fun logStreamErrorIfActive(
         error: Throwable,
         operationType: OperationType,
@@ -497,6 +517,9 @@ class GamerZoneRepository(
 
                 if (liveEntryFee > 0L) {
                     val newBalance = currentBalance - liveEntryFee
+                    val txTitle = "Joined: $liveTitle".take(100)
+                    val txSubtitle = "$liveMode • $liveMap • Slot #$slotNum".take(150)
+                    val adminTxRef = db.collection("adminTransactions").document(txDocRef.id)
                     tx.update(
                         userRef,
                         mapOf(
@@ -511,8 +534,25 @@ class GamerZoneRepository(
                             "type" to WalletTxType.TOURNAMENT_ENTRY.raw,
                             "direction" to "debit",
                             "amountPkr" to liveEntryFee,
-                            "title" to "Joined: $liveTitle".take(100),
-                            "subtitle" to "$liveMode • $liveMap • Slot #$slotNum".take(150),
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
+                            "referenceId" to tournament.id,
+                            "status" to "completed",
+                            "balanceAfterPkr" to newBalance,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    tx.set(
+                        adminTxRef,
+                        mapOf(
+                            "userId" to uid,
+                            "inGameName" to profile.inGameName,
+                            "userEmail" to profile.email,
+                            "type" to WalletTxType.TOURNAMENT_ENTRY.raw,
+                            "direction" to "debit",
+                            "amountPkr" to liveEntryFee,
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
                             "referenceId" to tournament.id,
                             "status" to "completed",
                             "balanceAfterPkr" to newBalance,
@@ -533,6 +573,11 @@ class GamerZoneRepository(
 
     // --- PLAYER WALLET DEPOSIT & WITHDRAWAL ---
 
+    private fun buildTidKey(paymentMethod: PaymentMethod, transactionId: String): String {
+        val sanitized = transactionId.trim().uppercase().replace(Regex("[^A-Z0-9_-]"), "_")
+        return "${paymentMethod.raw}_$sanitized".take(128)
+    }
+
     suspend fun submitDepositRequest(
         profile: PlayerProfile,
         amountPkr: Long,
@@ -547,31 +592,57 @@ class GamerZoneRepository(
             val cleanTid = transactionId.trim()
             val cleanSender = senderNumber.trim()
             val cleanScreenshot = screenshotBase64.trim()
-            require(amountPkr in 10L..500_000L) { "Deposit amount must be between 10 and 500,000 PKR." }
+            require(amountPkr in WalletLimits.MIN_DEPOSIT_PKR..WalletLimits.MAX_DEPOSIT_PKR) {
+                "Minimum deposit amount is ${WalletLimits.MIN_DEPOSIT_PKR} PKR."
+            }
             require(cleanTid.length in 4..64) { "Enter a valid Transaction ID (4-64 characters)." }
             require(cleanSender.length <= 25) { "Sender number must be at most 25 characters." }
             require(cleanScreenshot.length in 20..600_000) { "Please attach a valid payment screenshot." }
 
+            val tidKey = buildTidKey(paymentMethod, cleanTid)
             val reqRef = db.collection("depositRequests").document()
+            val tidLockRef = db.collection("usedTransactionIds").document(tidKey)
             path = reqRef.path
-            reqRef.set(
-                mapOf(
-                    "userId" to uid,
-                    "inGameName" to profile.inGameName,
-                    "userEmail" to profile.email,
-                    "amountPkr" to amountPkr,
-                    "paymentMethod" to paymentMethod.raw,
-                    "receiverAccountNumber" to paymentMethod.accountNumber,
-                    "transactionId" to cleanTid,
-                    "senderNumber" to cleanSender,
-                    "screenshotBase64" to cleanScreenshot,
-                    "status" to RequestStatus.PENDING.raw,
-                    "adminNote" to "",
-                    "reviewedBy" to "",
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp()
+
+            db.runTransaction { tx ->
+                val existingLock = tx.get(tidLockRef)
+                if (existingLock.exists()) {
+                    throw IllegalStateException(
+                        "This Transaction ID ($cleanTid) has already been submitted. Duplicate transactions are not allowed."
+                    )
+                }
+
+                tx.set(
+                    reqRef,
+                    mapOf(
+                        "userId" to uid,
+                        "inGameName" to profile.inGameName,
+                        "userEmail" to profile.email,
+                        "amountPkr" to amountPkr,
+                        "paymentMethod" to paymentMethod.raw,
+                        "receiverAccountNumber" to paymentMethod.accountNumber,
+                        "transactionId" to cleanTid,
+                        "tidKey" to tidKey,
+                        "senderNumber" to cleanSender,
+                        "screenshotBase64" to cleanScreenshot,
+                        "status" to RequestStatus.PENDING.raw,
+                        "adminNote" to "",
+                        "reviewedBy" to "",
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
                 )
-            ).await()
+                tx.set(
+                    tidLockRef,
+                    mapOf(
+                        "userId" to uid,
+                        "depositId" to reqRef.id,
+                        "transactionId" to cleanTid,
+                        "paymentMethod" to paymentMethod.raw,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
+            }.await()
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -593,13 +664,16 @@ class GamerZoneRepository(
             val uid = requireUserId()
             val cleanAcc = accountNumber.trim()
             val cleanTitle = accountTitle.trim()
-            require(amountPkr in 50L..500_000L) { "Minimum withdrawal is 50 PKR." }
+            require(amountPkr in WalletLimits.MIN_WITHDRAWAL_PKR..WalletLimits.MAX_WITHDRAWAL_PKR) {
+                "Minimum withdrawal amount is ${WalletLimits.MIN_WITHDRAWAL_PKR} PKR."
+            }
             require(cleanAcc.length in 7..20) { "Enter a valid ${paymentMethod.displayName} account number." }
             require(cleanTitle.length in 2..60) { "Enter the account holder name (2-60 characters)." }
 
             val userRef = db.collection("users").document(uid)
             val wdRef = db.collection("withdrawalRequests").document()
             val txRef = userRef.collection("walletTransactions").document()
+            val adminTxRef = db.collection("adminTransactions").document(txRef.id)
             path = wdRef.path
 
             db.runTransaction { tx ->
@@ -610,6 +684,8 @@ class GamerZoneRepository(
                     throw IllegalStateException("Insufficient balance ($currentBalance PKR available).")
                 }
                 val newBalance = currentBalance - amountPkr
+                val txTitle = "${paymentMethod.displayName} Withdrawal"
+                val txSubtitle = "To: $cleanAcc ($cleanTitle)".take(150)
 
                 tx.set(
                     wdRef,
@@ -642,8 +718,25 @@ class GamerZoneRepository(
                         "type" to WalletTxType.WITHDRAWAL.raw,
                         "direction" to "debit",
                         "amountPkr" to amountPkr,
-                        "title" to "${paymentMethod.displayName} Withdrawal",
-                        "subtitle" to "To: $cleanAcc ($cleanTitle)".take(150),
+                        "title" to txTitle,
+                        "subtitle" to txSubtitle,
+                        "referenceId" to wdRef.id,
+                        "status" to "pending",
+                        "balanceAfterPkr" to newBalance,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                tx.set(
+                    adminTxRef,
+                    mapOf(
+                        "userId" to uid,
+                        "inGameName" to profile.inGameName,
+                        "userEmail" to profile.email,
+                        "type" to WalletTxType.WITHDRAWAL.raw,
+                        "direction" to "debit",
+                        "amountPkr" to amountPkr,
+                        "title" to txTitle,
+                        "subtitle" to txSubtitle,
                         "referenceId" to wdRef.id,
                         "status" to "pending",
                         "balanceAfterPkr" to newBalance,
@@ -678,6 +771,7 @@ class GamerZoneRepository(
             val depRef = db.collection("depositRequests").document(request.id)
             val userRef = db.collection("users").document(request.userId)
             val txRef = userRef.collection("walletTransactions").document()
+            val adminTxRef = db.collection("adminTransactions").document(txRef.id)
 
             db.runTransaction { tx ->
                 val depSnap = tx.get(depRef)
@@ -703,6 +797,8 @@ class GamerZoneRepository(
 
                 if (approve) {
                     val newBalance = currentBalance + request.amountPkr
+                    val txTitle = "${method.displayName} Deposit Approved"
+                    val txSubtitle = "TID: ${request.transactionId}".take(150)
                     tx.update(
                         userRef,
                         mapOf(
@@ -717,8 +813,25 @@ class GamerZoneRepository(
                             "type" to WalletTxType.DEPOSIT.raw,
                             "direction" to "credit",
                             "amountPkr" to request.amountPkr,
-                            "title" to "${method.displayName} Deposit Approved",
-                            "subtitle" to "TID: ${request.transactionId}".take(150),
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
+                            "referenceId" to request.id,
+                            "status" to "completed",
+                            "balanceAfterPkr" to newBalance,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    tx.set(
+                        adminTxRef,
+                        mapOf(
+                            "userId" to request.userId,
+                            "inGameName" to request.inGameName,
+                            "userEmail" to request.userEmail,
+                            "type" to WalletTxType.DEPOSIT.raw,
+                            "direction" to "credit",
+                            "amountPkr" to request.amountPkr,
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
                             "referenceId" to request.id,
                             "status" to "completed",
                             "balanceAfterPkr" to newBalance,
@@ -752,6 +865,7 @@ class GamerZoneRepository(
             val wdRef = db.collection("withdrawalRequests").document(request.id)
             val userRef = db.collection("users").document(request.userId)
             val txRef = userRef.collection("walletTransactions").document()
+            val adminTxRef = db.collection("adminTransactions").document(txRef.id)
 
             db.runTransaction { tx ->
                 val wdSnap = tx.get(wdRef)
@@ -777,6 +891,8 @@ class GamerZoneRepository(
 
                 if (approve) {
                     val noteSuffix = if (cleanNote.isNotBlank()) " • $cleanNote" else ""
+                    val txTitle = "${method.displayName} Payout Approved"
+                    val txSubtitle = "To: ${request.accountNumber}$noteSuffix".take(150)
                     tx.set(
                         txRef,
                         mapOf(
@@ -784,8 +900,25 @@ class GamerZoneRepository(
                             "type" to WalletTxType.WITHDRAWAL.raw,
                             "direction" to "debit",
                             "amountPkr" to request.amountPkr,
-                            "title" to "${method.displayName} Payout Sent",
-                            "subtitle" to "To: ${request.accountNumber}$noteSuffix".take(150),
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
+                            "referenceId" to request.id,
+                            "status" to "completed",
+                            "balanceAfterPkr" to currentBalance,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    tx.set(
+                        adminTxRef,
+                        mapOf(
+                            "userId" to request.userId,
+                            "inGameName" to request.inGameName,
+                            "userEmail" to request.userEmail,
+                            "type" to WalletTxType.WITHDRAWAL.raw,
+                            "direction" to "debit",
+                            "amountPkr" to request.amountPkr,
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
                             "referenceId" to request.id,
                             "status" to "completed",
                             "balanceAfterPkr" to currentBalance,
@@ -794,6 +927,8 @@ class GamerZoneRepository(
                     )
                 } else {
                     val refundedBalance = currentBalance + request.amountPkr
+                    val txTitle = "Withdrawal Refunded"
+                    val txSubtitle = cleanNote.ifBlank { "Rejected by admin verification" }.take(150)
                     tx.update(
                         userRef,
                         mapOf(
@@ -808,8 +943,25 @@ class GamerZoneRepository(
                             "type" to WalletTxType.WITHDRAWAL_REFUND.raw,
                             "direction" to "credit",
                             "amountPkr" to request.amountPkr,
-                            "title" to "Withdrawal Refunded",
-                            "subtitle" to cleanNote.ifBlank { "Rejected by admin verification" }.take(150),
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
+                            "referenceId" to request.id,
+                            "status" to "completed",
+                            "balanceAfterPkr" to refundedBalance,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    tx.set(
+                        adminTxRef,
+                        mapOf(
+                            "userId" to request.userId,
+                            "inGameName" to request.inGameName,
+                            "userEmail" to request.userEmail,
+                            "type" to WalletTxType.WITHDRAWAL_REFUND.raw,
+                            "direction" to "credit",
+                            "amountPkr" to request.amountPkr,
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
                             "referenceId" to request.id,
                             "status" to "completed",
                             "balanceAfterPkr" to refundedBalance,
@@ -1037,6 +1189,10 @@ class GamerZoneRepository(
                 val userStatUpdates = statUpdates.toMutableMap()
                 if (safePrize > 0L) {
                     val newBalance = currentBalance + safePrize
+                    val userEmail = userSnap?.getString("email").orEmpty().ifBlank { "${registration.userId}@player.gamerzonepk" }
+                    val txTitle = "Prize: ${tournament.title}".take(100)
+                    val txSubtitle = "Placement #$safePlacement • $totalPts PTS".take(150)
+                    val adminTxRef = db.collection("adminTransactions").document(txRef.id)
                     userStatUpdates["walletBalancePkr"] = newBalance
                     tx.set(
                         txRef,
@@ -1045,8 +1201,25 @@ class GamerZoneRepository(
                             "type" to WalletTxType.PRIZE_PAYOUT.raw,
                             "direction" to "credit",
                             "amountPkr" to safePrize,
-                            "title" to "Prize: ${tournament.title}".take(100),
-                            "subtitle" to "Placement #$safePlacement • $totalPts PTS".take(150),
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
+                            "referenceId" to tournament.id,
+                            "status" to "completed",
+                            "balanceAfterPkr" to newBalance,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    tx.set(
+                        adminTxRef,
+                        mapOf(
+                            "userId" to registration.userId,
+                            "inGameName" to registration.inGameName,
+                            "userEmail" to userEmail,
+                            "type" to WalletTxType.PRIZE_PAYOUT.raw,
+                            "direction" to "credit",
+                            "amountPkr" to safePrize,
+                            "title" to txTitle,
+                            "subtitle" to txSubtitle,
                             "referenceId" to tournament.id,
                             "status" to "completed",
                             "balanceAfterPkr" to newBalance,

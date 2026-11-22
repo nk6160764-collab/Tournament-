@@ -32,6 +32,23 @@ const auth = getAuth(app);
 const db = getFirestore(app, GAMERZONE_CONFIG.firestoreDatabaseId);
 const googleProvider = new GoogleAuthProvider();
 
+const MIN_DEPOSIT_PKR = 100;
+const MIN_WITHDRAWAL_PKR = 200;
+
+function makeTidKey(methodRaw, tid) {
+  const normalized = String(tid || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "_");
+  return `${methodRaw}_${normalized}`.slice(0, 120);
+}
+
+function formatTs(ts) {
+  if (!ts) return "Just now";
+  const d = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 // Application State
 const state = {
   user: null,
@@ -46,6 +63,7 @@ const state = {
   myWithdrawals: [],
   adminDeposits: [],
   adminWithdrawals: [],
+  adminTransactions: [],
   activeTab: "tournaments",
   modeFilter: "All",
   statusFilter: "all",
@@ -53,6 +71,10 @@ const state = {
   txFilter: "all",
   lbMode: "players",
   adminTab: "wallet",
+  adminWalletSubTab: "deposits", // deposits | withdrawals | history
+  adminWalletPendingOnly: true,
+  adminWalletSearch: "",
+  adminTxTypeFilter: "all",
   selectedResultsTournamentId: "",
   selectedTournamentRoster: [],
   unsubs: [],
@@ -364,6 +386,15 @@ function setAdminMode(enabled) {
         }
       )
     );
+    state.adminUnsubs.push(
+      onSnapshot(
+        query(collection(db, "adminTransactions"), orderBy("createdAt", "desc")),
+        (snap) => {
+          state.adminTransactions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          if (state.activeTab === "admin") renderAdmin();
+        }
+      )
+    );
   }
   renderAuthState();
 }
@@ -653,7 +684,7 @@ async function executeJoinTournament(tournament) {
           walletBalancePkr: newBal,
           updatedAt: serverTimestamp()
         });
-        tx.set(txDocRef, {
+        const txPayload = {
           userId: uid,
           type: "tournament_entry",
           direction: "debit",
@@ -664,6 +695,12 @@ async function executeJoinTournament(tournament) {
           status: "completed",
           balanceAfterPkr: newBal,
           createdAt: serverTimestamp()
+        };
+        tx.set(txDocRef, txPayload);
+        tx.set(doc(db, "adminTransactions", txDocRef.id), {
+          ...txPayload,
+          inGameName: state.profile.inGameName,
+          userEmail: state.profile.email
         });
       }
     });
@@ -692,9 +729,11 @@ document.querySelectorAll("#walletFeeFilterRow .chip").forEach((chip) => {
 });
 
 function renderStatusBadge(status) {
-  if (status === "approved" || status === "completed") return `<span class="badge badge-green">${escapeHtml(status)}</span>`;
-  if (status === "rejected") return `<span class="badge badge-crimson">${escapeHtml(status)}</span>`;
-  return `<span class="badge badge-gold">${escapeHtml(status || "pending")}</span>`;
+  const s = String(status || "pending").toLowerCase();
+  const label = s.charAt(0).toUpperCase() + s.slice(1);
+  if (s === "approved" || s === "completed") return `<span class="badge badge-green">${escapeHtml(label)}</span>`;
+  if (s === "rejected") return `<span class="badge badge-crimson">${escapeHtml(label)}</span>`;
+  return `<span class="badge badge-gold">${escapeHtml(label)}</span>`;
 }
 
 function renderWallet() {
@@ -889,8 +928,9 @@ function openAddMoneyModal() {
         </div>
       </div>
       <div class="field">
-        <label for="depAmount">Deposit Amount (PKR) *</label>
-        <input id="depAmount" class="input" type="number" min="10" max="500000" required placeholder="e.g. 200" />
+        <label for="depAmount">Deposit Amount (Min ${MIN_DEPOSIT_PKR} PKR) *</label>
+        <input id="depAmount" class="input" type="number" min="${MIN_DEPOSIT_PKR}" max="500000" required placeholder="Min ${MIN_DEPOSIT_PKR} PKR (e.g. 200)" />
+        <small class="section-sub">Minimum deposit: ${MIN_DEPOSIT_PKR} PKR. Balance is added only after Admin verification.</small>
       </div>
       <div class="field">
         <label for="depTid">Transaction ID (TID) *</label>
@@ -947,22 +987,49 @@ function openAddMoneyModal() {
     const transactionId = document.getElementById("depTid").value.trim();
     const senderNumber = document.getElementById("depSender").value.trim();
 
+    if (!Number.isFinite(amountPkr) || amountPkr < MIN_DEPOSIT_PKR || amountPkr > 500000) {
+      showToast(`Minimum deposit amount is ${MIN_DEPOSIT_PKR} PKR.`, true);
+      return;
+    }
+    if (transactionId.length < 4) {
+      showToast("Enter a valid Transaction ID (min 4 characters).", true);
+      return;
+    }
+
+    const tidKey = makeTidKey(methodObj.raw, transactionId);
+
     try {
-      await setDoc(doc(collection(db, "depositRequests")), {
-        userId: state.user.uid,
-        inGameName: state.profile.inGameName,
-        userEmail: state.profile.email,
-        amountPkr,
-        paymentMethod: methodObj.raw,
-        receiverAccountNumber: methodObj.accountNumber,
-        transactionId,
-        senderNumber,
-        screenshotBase64: uploadedBase64,
-        status: "pending",
-        adminNote: "",
-        reviewedBy: "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      await runTransaction(db, async (tx) => {
+        const lockRef = doc(db, "usedTransactionIds", tidKey);
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists()) {
+          throw new Error("This Transaction ID has already been submitted. Duplicate deposits are blocked.");
+        }
+        const depRef = doc(collection(db, "depositRequests"));
+        tx.set(lockRef, {
+          depositId: depRef.id,
+          userId: state.user.uid,
+          paymentMethod: methodObj.raw,
+          transactionId,
+          createdAt: serverTimestamp()
+        });
+        tx.set(depRef, {
+          userId: state.user.uid,
+          inGameName: state.profile.inGameName,
+          userEmail: state.profile.email,
+          amountPkr,
+          paymentMethod: methodObj.raw,
+          receiverAccountNumber: methodObj.accountNumber,
+          transactionId,
+          tidKey,
+          senderNumber,
+          screenshotBase64: uploadedBase64,
+          status: "pending",
+          adminNote: "",
+          reviewedBy: "",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
       });
       closeModal();
       showToast("Deposit submitted! Balance will be credited after Admin verification.");
@@ -989,8 +1056,9 @@ function openWithdrawModal() {
         </select>
       </div>
       <div class="field">
-        <label for="wdAmount">Amount (Min 50 PKR) *</label>
-        <input id="wdAmount" class="input" type="number" min="50" max="${Math.max(50, bal)}" required placeholder="e.g. 500" />
+        <label for="wdAmount">Amount (Min ${MIN_WITHDRAWAL_PKR} PKR) *</label>
+        <input id="wdAmount" class="input" type="number" min="${MIN_WITHDRAWAL_PKR}" max="${Math.max(MIN_WITHDRAWAL_PKR, bal)}" required placeholder="Min ${MIN_WITHDRAWAL_PKR} PKR (e.g. 500)" />
+        <small class="section-sub">Minimum withdrawal: ${MIN_WITHDRAWAL_PKR} PKR. Status starts as Pending until Admin payout.</small>
       </div>
       <div class="field">
         <label for="wdAcc">Your EasyPaisa / JazzCash Number *</label>
@@ -1011,6 +1079,12 @@ function openWithdrawModal() {
     const amountPkr = parseInt(document.getElementById("wdAmount").value, 10);
     const accountNumber = document.getElementById("wdAcc").value.trim();
     const accountTitle = document.getElementById("wdTitle").value.trim();
+
+    if (!Number.isFinite(amountPkr) || amountPkr < MIN_WITHDRAWAL_PKR || amountPkr > 500000) {
+      showToast(`Minimum withdrawal amount is ${MIN_WITHDRAWAL_PKR} PKR.`, true);
+      return;
+    }
+
     const uid = state.user.uid;
     const userRef = doc(db, "users", uid);
     const wdRef = doc(collection(db, "withdrawalRequests"));
@@ -1041,7 +1115,7 @@ function openWithdrawModal() {
           walletBalancePkr: newBal,
           updatedAt: serverTimestamp()
         });
-        tx.set(txRef, {
+        const txPayload = {
           userId: uid,
           type: "withdrawal",
           direction: "debit",
@@ -1052,6 +1126,12 @@ function openWithdrawModal() {
           status: "pending",
           balanceAfterPkr: newBal,
           createdAt: serverTimestamp()
+        };
+        tx.set(txRef, txPayload);
+        tx.set(doc(db, "adminTransactions", txRef.id), {
+          ...txPayload,
+          inGameName: state.profile.inGameName,
+          userEmail: state.profile.email
         });
       });
       closeModal();
@@ -1231,59 +1311,224 @@ function renderAdmin() {
   if (state.adminTab === "wallet") {
     const pendingDeps = state.adminDeposits.filter((d) => d.status === "pending");
     const pendingWds = state.adminWithdrawals.filter((w) => w.status === "pending");
+    const q = state.adminWalletSearch.trim().toLowerCase();
 
-    el.adminContent.innerHTML = `
-      <div class="grid grid-2">
+    const filteredDeposits = state.adminDeposits.filter((d) => {
+      const statusOk = !state.adminWalletPendingOnly || d.status === "pending";
+      const queryOk =
+        !q ||
+        (d.transactionId || "").toLowerCase().includes(q) ||
+        (d.inGameName || "").toLowerCase().includes(q) ||
+        (d.userEmail || "").toLowerCase().includes(q) ||
+        (d.senderNumber || "").toLowerCase().includes(q);
+      return statusOk && queryOk;
+    });
+
+    const filteredWithdrawals = state.adminWithdrawals.filter((w) => {
+      const statusOk = !state.adminWalletPendingOnly || w.status === "pending";
+      const queryOk =
+        !q ||
+        (w.accountNumber || "").toLowerCase().includes(q) ||
+        (w.accountTitle || "").toLowerCase().includes(q) ||
+        (w.inGameName || "").toLowerCase().includes(q) ||
+        (w.userEmail || "").toLowerCase().includes(q);
+      return statusOk && queryOk;
+    });
+
+    const filteredAdminTx = state.adminTransactions.filter((t) => {
+      const typeOk =
+        state.adminTxTypeFilter === "all" ||
+        (state.adminTxTypeFilter === "withdrawal"
+          ? t.type === "withdrawal" || t.type === "withdrawal_refund"
+          : t.type === state.adminTxTypeFilter);
+      const queryOk =
+        !q ||
+        (t.inGameName || "").toLowerCase().includes(q) ||
+        (t.userEmail || "").toLowerCase().includes(q) ||
+        (t.title || "").toLowerCase().includes(q) ||
+        (t.subtitle || "").toLowerCase().includes(q);
+      return typeOk && queryOk;
+    });
+
+    let bodyHtml = "";
+    if (state.adminWalletSubTab === "deposits") {
+      bodyHtml = `
         <div class="list-stack">
-          <h3>Pending Deposits (${pendingDeps.length})</h3>
           ${
-            pendingDeps.length === 0
-              ? `<div class="card"><p class="section-sub">No pending deposit requests.</p></div>`
-              : pendingDeps
+            filteredDeposits.length === 0
+              ? `<div class="card"><p class="section-sub">No deposit requests match the selected filter.</p></div>`
+              : filteredDeposits
                   .map(
                     (d) => `
               <div class="card card-neon">
                 <div class="row-between">
-                  <strong>${escapeHtml(d.inGameName)} • ${Number(d.amountPkr)} PKR</strong>
-                  <span class="badge badge-cyan">${escapeHtml(d.paymentMethod?.toUpperCase())}</span>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    ${renderStatusBadge(d.status)}
+                    <span class="badge badge-cyan">${escapeHtml(d.paymentMethod?.toUpperCase())}</span>
+                  </div>
+                  <strong style="color:var(--neon-green); font-size:1.15rem;">+${Number(d.amountPkr)} PKR</strong>
                 </div>
-                <div class="section-sub">TID: <span class="mono">${escapeHtml(d.transactionId)}</span> • Sender: ${escapeHtml(d.senderNumber || "N/A")}</div>
+                <div style="margin-top:8px;"><strong>${escapeHtml(d.inGameName)}</strong> <span class="section-sub">(${escapeHtml(d.userEmail)})</span></div>
+                <div class="row-between" style="margin-top:4px;">
+                  <div class="section-sub">TID: <span class="mono" style="color:var(--cyan-accent);">${escapeHtml(d.transactionId)}</span> • To: ${escapeHtml(d.receiverAccountNumber)}</div>
+                  <button class="btn btn-ghost btn-sm copy-tid-btn" data-tid="${escapeHtml(d.transactionId)}" type="button">Copy TID</button>
+                </div>
+                <div class="section-sub">Sender: ${escapeHtml(d.senderNumber || "N/A")} • ${escapeHtml(formatTs(d.createdAt))}</div>
+                ${d.adminNote ? `<div class="section-sub" style="color:var(--gold-trophy);">Admin Note: ${escapeHtml(d.adminNote)}</div>` : ""}
+                ${
+                  d.screenshotBase64
+                    ? `<div style="margin-top:10px;">
+                         <img class="screenshot-thumb view-shot-btn" style="cursor:pointer;" data-shot="${escapeHtml(d.screenshotBase64)}" src="data:image/jpeg;base64,${escapeHtml(d.screenshotBase64)}" alt="Deposit Payment Proof" />
+                       </div>`
+                    : ""
+                }
                 <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                  ${d.screenshotBase64 ? `<button class="btn btn-ghost btn-sm view-shot-btn" data-shot="${escapeHtml(d.screenshotBase64)}" type="button">View Screenshot</button>` : ""}
-                  <button class="btn btn-primary btn-sm approve-dep-btn" data-id="${escapeHtml(d.id)}" type="button">Approve & Credit</button>
-                  <button class="btn btn-danger btn-sm reject-dep-btn" data-id="${escapeHtml(d.id)}" type="button">Reject</button>
+                  ${d.screenshotBase64 ? `<button class="btn btn-ghost btn-sm view-shot-btn" data-shot="${escapeHtml(d.screenshotBase64)}" type="button">Zoom Screenshot</button>` : ""}
+                  ${
+                    d.status === "pending"
+                      ? `<button class="btn btn-primary btn-sm approve-dep-btn" data-id="${escapeHtml(d.id)}" type="button">Approve & Credit</button>
+                         <button class="btn btn-danger btn-sm reject-dep-btn" data-id="${escapeHtml(d.id)}" type="button">Reject</button>`
+                      : ""
+                  }
                 </div>
               </div>`
                   )
                   .join("")
           }
         </div>
-
+      `;
+    } else if (state.adminWalletSubTab === "withdrawals") {
+      bodyHtml = `
         <div class="list-stack">
-          <h3>Pending Withdrawals (${pendingWds.length})</h3>
           ${
-            pendingWds.length === 0
-              ? `<div class="card"><p class="section-sub">No pending withdrawal requests.</p></div>`
-              : pendingWds
+            filteredWithdrawals.length === 0
+              ? `<div class="card"><p class="section-sub">No withdrawal requests match the selected filter.</p></div>`
+              : filteredWithdrawals
                   .map(
                     (w) => `
               <div class="card card-cyan">
                 <div class="row-between">
-                  <strong>${escapeHtml(w.inGameName)} • ${Number(w.amountPkr)} PKR</strong>
-                  <span class="badge badge-gold">${escapeHtml(w.paymentMethod?.toUpperCase())}</span>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    ${renderStatusBadge(w.status)}
+                    <span class="badge badge-gold">${escapeHtml(w.paymentMethod?.toUpperCase())}</span>
+                  </div>
+                  <strong style="color:var(--gold-trophy); font-size:1.15rem;">${Number(w.amountPkr)} PKR</strong>
                 </div>
-                <div class="section-sub">Pay To: <span class="mono">${escapeHtml(w.accountNumber)}</span> (${escapeHtml(w.accountTitle)})</div>
-                <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                  <button class="btn btn-primary btn-sm approve-wd-btn" data-id="${escapeHtml(w.id)}" type="button">Mark Paid</button>
-                  <button class="btn btn-danger btn-sm reject-wd-btn" data-id="${escapeHtml(w.id)}" type="button">Reject & Refund</button>
+                <div style="margin-top:8px;"><strong>${escapeHtml(w.inGameName)}</strong> <span class="section-sub">(${escapeHtml(w.userEmail)})</span></div>
+                <div class="row-between" style="margin-top:4px;">
+                  <div class="section-sub">Pay To: <span class="mono" style="color:var(--cyan-accent);">${escapeHtml(w.accountNumber)}</span> (${escapeHtml(w.accountTitle)})</div>
+                  <button class="btn btn-ghost btn-sm copy-tid-btn" data-tid="${escapeHtml(w.accountNumber)}" type="button">Copy Number</button>
                 </div>
+                <div class="section-sub">${escapeHtml(formatTs(w.createdAt))}</div>
+                ${w.adminNote ? `<div class="section-sub" style="color:var(--gold-trophy);">Admin Note: ${escapeHtml(w.adminNote)}</div>` : ""}
+                ${
+                  w.status === "pending"
+                    ? `<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+                         <button class="btn btn-primary btn-sm approve-wd-btn" data-id="${escapeHtml(w.id)}" type="button">Mark Paid</button>
+                         <button class="btn btn-danger btn-sm reject-wd-btn" data-id="${escapeHtml(w.id)}" type="button">Reject & Refund</button>
+                       </div>`
+                    : ""
+                }
               </div>`
                   )
                   .join("")
           }
         </div>
+      `;
+    } else {
+      const txFilters = [
+        { key: "all", label: "All Types" },
+        { key: "deposit", label: "Deposits" },
+        { key: "withdrawal", label: "Withdrawals" },
+        { key: "tournament_entry", label: "Match Fees" },
+        { key: "prize_payout", label: "Prizes" }
+      ];
+      bodyHtml = `
+        <div class="chip-row" id="adminTxFilters">
+          ${txFilters.map((f) => `<button class="chip ${state.adminTxTypeFilter === f.key ? "active" : ""}" data-txtype="${f.key}" type="button">${f.label}</button>`).join("")}
+        </div>
+        <div class="list-stack">
+          ${
+            filteredAdminTx.length === 0
+              ? `<div class="card"><p class="section-sub">No wallet transactions recorded yet.</p></div>`
+              : filteredAdminTx
+                  .map((tx) => {
+                    const isCredit = tx.direction === "credit";
+                    return `
+                  <div class="card">
+                    <div class="row-between">
+                      <div>
+                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:4px;">
+                          <span class="badge ${isCredit ? "badge-green" : "badge-crimson"}">${escapeHtml(tx.type)}</span>
+                          ${renderStatusBadge(tx.status)}
+                        </div>
+                        <strong>${escapeHtml(tx.inGameName || tx.userId)}</strong> <span class="section-sub">(${escapeHtml(tx.userEmail || "")})</span>
+                        <div class="section-sub">${escapeHtml(tx.title)} — ${escapeHtml(tx.subtitle)}</div>
+                        <div class="section-sub">${escapeHtml(formatTs(tx.createdAt))}</div>
+                      </div>
+                      <div style="text-align:right;">
+                        <div style="font-weight:700; font-size:1.1rem; color:${isCredit ? "var(--neon-green)" : "var(--crimson-live)"};">
+                          ${isCredit ? "+" : "-"}${Number(tx.amountPkr || 0)} PKR
+                        </div>
+                        <div class="section-sub">Bal: ${Number(tx.balanceAfterPkr || 0)} PKR</div>
+                      </div>
+                    </div>
+                  </div>`;
+                  })
+                  .join("")
+          }
+        </div>
+      `;
+    }
+
+    el.adminContent.innerHTML = `
+      <div class="chip-row" id="adminWalletSubNav">
+        <button class="chip ${state.adminWalletSubTab === "deposits" ? "active" : ""}" data-awtab="deposits" type="button">Deposits (${pendingDeps.length} pending)</button>
+        <button class="chip ${state.adminWalletSubTab === "withdrawals" ? "active" : ""}" data-awtab="withdrawals" type="button">Withdrawals (${pendingWds.length} pending)</button>
+        <button class="chip ${state.adminWalletSubTab === "history" ? "active" : ""}" data-awtab="history" type="button">Complete Transaction History (${state.adminTransactions.length})</button>
       </div>
+      <div class="row-between" style="margin-bottom:12px;">
+        <input id="adminWalletSearchInput" class="input" style="max-width:420px;" placeholder="Search TID, IGN, email, or account number..." value="${escapeHtml(state.adminWalletSearch)}" />
+        ${
+          state.adminWalletSubTab !== "history"
+            ? `<button id="toggleAdminPendingBtn" class="chip ${state.adminWalletPendingOnly ? "active" : ""}" type="button">${state.adminWalletPendingOnly ? "Showing: Pending Only" : "Showing: All (Pending, Approved, Rejected)"}</button>`
+            : ""
+        }
+      </div>
+      ${bodyHtml}
     `;
+
+    el.adminContent.querySelectorAll("#adminWalletSubNav .chip").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.adminWalletSubTab = b.dataset.awtab;
+        renderAdmin();
+      })
+    );
+    document.getElementById("toggleAdminPendingBtn")?.addEventListener("click", () => {
+      state.adminWalletPendingOnly = !state.adminWalletPendingOnly;
+      renderAdmin();
+    });
+    const searchEl = document.getElementById("adminWalletSearchInput");
+    searchEl?.addEventListener("input", (e) => {
+      state.adminWalletSearch = e.target.value;
+      const pos = e.target.selectionStart;
+      renderAdmin();
+      const refocused = document.getElementById("adminWalletSearchInput");
+      if (refocused) {
+        refocused.focus();
+        refocused.setSelectionRange(pos, pos);
+      }
+    });
+    el.adminContent.querySelectorAll("#adminTxFilters .chip").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.adminTxTypeFilter = b.dataset.txtype;
+        renderAdmin();
+      })
+    );
+    el.adminContent.querySelectorAll(".copy-tid-btn").forEach((b) =>
+      b.addEventListener("click", () => copyText(b.dataset.tid, "Copied"))
+    );
+
     bindScreenshotButtons();
     el.adminContent.querySelectorAll(".approve-dep-btn").forEach((b) =>
       b.addEventListener("click", () => reviewDeposit(b.dataset.id, true))
@@ -1462,7 +1707,7 @@ async function reviewDeposit(reqId, approve) {
       if (approve) {
         const newBal = curBal + Number(req.amountPkr);
         tx.update(userRef, { walletBalancePkr: newBal, updatedAt: serverTimestamp() });
-        tx.set(txRef, {
+        const txPayload = {
           userId: req.userId,
           type: "deposit",
           direction: "credit",
@@ -1473,6 +1718,12 @@ async function reviewDeposit(reqId, approve) {
           status: "completed",
           balanceAfterPkr: newBal,
           createdAt: serverTimestamp()
+        };
+        tx.set(txRef, txPayload);
+        tx.set(doc(db, "adminTransactions", txRef.id), {
+          ...txPayload,
+          inGameName: req.inGameName || "",
+          userEmail: req.userEmail || ""
         });
       }
     });
@@ -1504,7 +1755,7 @@ async function reviewWithdrawal(reqId, approve) {
         updatedAt: serverTimestamp()
       });
       if (approve) {
-        tx.set(txRef, {
+        const txPayload = {
           userId: req.userId,
           type: "withdrawal",
           direction: "debit",
@@ -1515,11 +1766,17 @@ async function reviewWithdrawal(reqId, approve) {
           status: "completed",
           balanceAfterPkr: curBal,
           createdAt: serverTimestamp()
+        };
+        tx.set(txRef, txPayload);
+        tx.set(doc(db, "adminTransactions", txRef.id), {
+          ...txPayload,
+          inGameName: req.inGameName || "",
+          userEmail: req.userEmail || ""
         });
       } else {
         const refunded = curBal + Number(req.amountPkr);
         tx.update(userRef, { walletBalancePkr: refunded, updatedAt: serverTimestamp() });
-        tx.set(txRef, {
+        const txPayload = {
           userId: req.userId,
           type: "withdrawal_refund",
           direction: "credit",
@@ -1530,6 +1787,12 @@ async function reviewWithdrawal(reqId, approve) {
           status: "completed",
           balanceAfterPkr: refunded,
           createdAt: serverTimestamp()
+        };
+        tx.set(txRef, txPayload);
+        tx.set(doc(db, "adminTransactions", txRef.id), {
+          ...txPayload,
+          inGameName: req.inGameName || "",
+          userEmail: req.userEmail || ""
         });
       }
     });
@@ -1701,7 +1964,8 @@ function openScorePlayerModal(tourney, reg) {
         if (prize > 0) {
           const newBal = curBal + prize;
           tx.update(uRef, { walletBalancePkr: newBal, updatedAt: serverTimestamp() });
-          tx.set(doc(collection(db, "users", reg.userId, "walletTransactions")), {
+          const prizeTxRef = doc(collection(db, "users", reg.userId, "walletTransactions"));
+          const prizePayload = {
             userId: reg.userId,
             type: "prize_payout",
             direction: "credit",
@@ -1712,6 +1976,12 @@ function openScorePlayerModal(tourney, reg) {
             status: "completed",
             balanceAfterPkr: newBal,
             createdAt: serverTimestamp()
+          };
+          tx.set(prizeTxRef, prizePayload);
+          tx.set(doc(db, "adminTransactions", prizeTxRef.id), {
+            ...prizePayload,
+            inGameName: reg.inGameName || "",
+            userEmail: ""
           });
         }
       });

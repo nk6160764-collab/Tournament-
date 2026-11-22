@@ -85,6 +85,7 @@ import com.example.model.PaymentMethod
 import com.example.model.PlayerProfile
 import com.example.model.RequestStatus
 import com.example.model.UiState
+import com.example.model.WalletLimits
 import com.example.model.WalletTransaction
 import com.example.model.WalletTxType
 import com.example.model.WithdrawalRequest
@@ -867,12 +868,12 @@ fun AddMoneyDialog(
                     }
                 }
 
-                // Quick Amount Chips + Field
+                // Quick Amount Chips + Field (Min 100 PKR)
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("50", "100", "250", "500", "1000").forEach { preset ->
+                    listOf("100", "250", "500", "1000").forEach { preset ->
                         FilterChip(
                             selected = amountText == preset,
                             onClick = { amountText = preset },
@@ -885,6 +886,9 @@ fun AddMoneyDialog(
                     value = amountText,
                     onValueChange = { amountText = it.filter { ch -> ch.isDigit() } },
                     label = { Text("Deposit Amount (PKR) *") },
+                    supportingText = {
+                        Text("Minimum deposit: ${WalletLimits.MIN_DEPOSIT_PKR} PKR • Credited after admin approval")
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier
@@ -974,9 +978,12 @@ fun AddMoneyDialog(
                     val cleanTid = transactionId.trim()
                     val b64 = screenshotBase64.orEmpty()
                     when {
-                        amt < 10L -> localError = "Minimum deposit is 10 PKR."
-                        cleanTid.length < 4 -> localError = "Enter a valid Transaction ID (min 4 characters)."
-                        b64.length < 20 -> localError = "Please upload your payment screenshot."
+                        amt < WalletLimits.MIN_DEPOSIT_PKR ->
+                            localError = "Minimum deposit is ${WalletLimits.MIN_DEPOSIT_PKR} PKR."
+                        cleanTid.length < 4 ->
+                            localError = "Enter a valid Transaction ID (min 4 characters)."
+                        b64.length < 20 ->
+                            localError = "Please upload your payment screenshot."
                         else -> {
                             localError = null
                             onSubmit(amt, selectedMethod, cleanTid, senderNumber.trim(), b64)
@@ -1035,7 +1042,7 @@ fun WithdrawMoneyDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Available Balance: $availableBalance PKR (Min: 50 PKR)",
+                    text = "Available Balance: $availableBalance PKR (Min: ${WalletLimits.MIN_WITHDRAWAL_PKR} PKR)",
                     style = MaterialTheme.typography.labelLarge,
                     color = NeonGreen
                 )
@@ -1058,14 +1065,14 @@ fun WithdrawMoneyDialog(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(100L, 250L, 500L).filter { it <= availableBalance }.forEach { preset ->
+                    listOf(200L, 500L, 1000L).filter { it <= availableBalance }.forEach { preset ->
                         FilterChip(
                             selected = amountText == preset.toString(),
                             onClick = { amountText = preset.toString() },
                             label = { Text("$preset") }
                         )
                     }
-                    if (availableBalance >= 50L) {
+                    if (availableBalance >= WalletLimits.MIN_WITHDRAWAL_PKR) {
                         FilterChip(
                             selected = amountText == availableBalance.toString(),
                             onClick = { amountText = availableBalance.toString() },
@@ -1078,6 +1085,9 @@ fun WithdrawMoneyDialog(
                     value = amountText,
                     onValueChange = { amountText = it.filter { c -> c.isDigit() } },
                     label = { Text("Withdraw Amount (PKR) *") },
+                    supportingText = {
+                        Text("Minimum withdrawal: ${WalletLimits.MIN_WITHDRAWAL_PKR} PKR")
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier
@@ -1122,10 +1132,14 @@ fun WithdrawMoneyDialog(
                     val cleanAcc = accountNumber.trim()
                     val cleanTitle = accountTitle.trim()
                     when {
-                        amt < 50L -> localError = "Minimum withdrawal amount is 50 PKR."
-                        amt > availableBalance -> localError = "Insufficient balance ($availableBalance PKR available)."
-                        cleanAcc.length < 7 -> localError = "Enter a valid mobile account number."
-                        cleanTitle.length < 2 -> localError = "Enter the account holder's name."
+                        amt < WalletLimits.MIN_WITHDRAWAL_PKR ->
+                            localError = "Minimum withdrawal amount is ${WalletLimits.MIN_WITHDRAWAL_PKR} PKR."
+                        amt > availableBalance ->
+                            localError = "Insufficient balance ($availableBalance PKR available)."
+                        cleanAcc.length < 7 ->
+                            localError = "Enter a valid mobile account number."
+                        cleanTitle.length < 2 ->
+                            localError = "Enter the account holder's name."
                         else -> {
                             localError = null
                             onSubmit(amt, selectedMethod, cleanAcc, cleanTitle)

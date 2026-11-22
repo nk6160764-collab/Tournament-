@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.GamerZoneRepository
+import com.example.model.AdminWalletTransaction
 import com.example.model.Announcement
 import com.example.model.AnnouncementCategory
 import com.example.model.DepositRequest
@@ -103,6 +104,13 @@ class GamerZoneViewModel(
                 if (admin) repository.observeAllWithdrawalRequests() else flowOf(emptyList())
             }
             .toUiStateFlow("observeAllWithdrawalRequests")
+
+    val allAdminTransactionsState: StateFlow<UiState<List<AdminWalletTransaction>>> =
+        isAdmin
+            .flatMapLatest { admin ->
+                if (admin) repository.observeAllAdminTransactions() else flowOf(emptyList())
+            }
+            .toUiStateFlow("observeAllAdminTransactions")
 
     val selectedTournamentRegistrations: StateFlow<UiState<List<TournamentRegistration>>> =
         _selectedTournamentId

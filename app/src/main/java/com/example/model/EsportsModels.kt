@@ -197,6 +197,13 @@ data class Announcement(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+object WalletLimits {
+    const val MIN_DEPOSIT_PKR = 100L
+    const val MAX_DEPOSIT_PKR = 500_000L
+    const val MIN_WITHDRAWAL_PKR = 200L
+    const val MAX_WITHDRAWAL_PKR = 500_000L
+}
+
 @Keep
 @IgnoreExtraProperties
 data class DepositRequest(
@@ -208,6 +215,7 @@ data class DepositRequest(
     val paymentMethod: String = PaymentMethod.EASYPAISA.raw,
     val receiverAccountNumber: String = PaymentMethod.EASYPAISA.accountNumber,
     val transactionId: String = "",
+    val tidKey: String = "",
     val senderNumber: String = "",
     val screenshotBase64: String = "",
     val status: String = RequestStatus.PENDING.raw,
@@ -250,3 +258,22 @@ data class WalletTransaction(
     val balanceAfterPkr: Long = 0L,
     @ServerTimestamp val createdAt: Timestamp? = null
 )
+
+@Keep
+@IgnoreExtraProperties
+data class AdminWalletTransaction(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val inGameName: String = "",
+    val userEmail: String = "",
+    val type: String = WalletTxType.DEPOSIT.raw,
+    val direction: String = "credit",
+    val amountPkr: Long = 0L,
+    val title: String = "",
+    val subtitle: String = "",
+    val referenceId: String = "",
+    val status: String = "completed",
+    val balanceAfterPkr: Long = 0L,
+    @ServerTimestamp val createdAt: Timestamp? = null
+)
+

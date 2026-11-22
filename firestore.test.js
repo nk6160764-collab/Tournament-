@@ -318,7 +318,8 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
     })
   );
 
-  // Player submits valid EasyPaisa deposit request (status must be 'pending')
+  // Deposit below 100 PKR MUST fail server-side
+  const tidKey = "easypaisa_EP99887766";
   const depPayload = {
     userId: ALICE_UID,
     inGameName: "PK_Shadow",
@@ -327,6 +328,7 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
     paymentMethod: "easypaisa",
     receiverAccountNumber: "03489674834",
     transactionId: "EP99887766",
+    tidKey,
     senderNumber: "03451112233",
     screenshotBase64: "AAAA_VALID_BASE64_SCREENSHOT_PAYLOAD_DATA",
     status: "pending",
@@ -335,13 +337,56 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
     createdAt: now,
     updatedAt: now,
   };
-  await assertSucceeds(aliceDb.collection("depositRequests").doc("dep_1").set(depPayload));
+
+  const underMinDepBatch = aliceDb.batch();
+  underMinDepBatch.set(aliceDb.collection("depositRequests").doc("dep_low"), {
+    ...depPayload,
+    amountPkr: 99,
+    tidKey: "easypaisa_EP_LOW",
+    transactionId: "EP_LOW",
+  });
+  underMinDepBatch.set(aliceDb.collection("usedTransactionIds").doc("easypaisa_EP_LOW"), {
+    userId: ALICE_UID,
+    depositId: "dep_low",
+    transactionId: "EP_LOW",
+    paymentMethod: "easypaisa",
+    createdAt: now,
+  });
+  await assertFails(underMinDepBatch.commit());
+
+  // Deposit without usedTransactionIds deduplication lock MUST fail
+  await assertFails(aliceDb.collection("depositRequests").doc("dep_nolock").set(depPayload));
+
+  // Valid EasyPaisa deposit >= 100 PKR with atomic usedTransactionIds lock succeeds
+  const depBatch = aliceDb.batch();
+  depBatch.set(aliceDb.collection("depositRequests").doc("dep_1"), depPayload);
+  depBatch.set(aliceDb.collection("usedTransactionIds").doc(tidKey), {
+    userId: ALICE_UID,
+    depositId: "dep_1",
+    transactionId: "EP99887766",
+    paymentMethod: "easypaisa",
+    createdAt: now,
+  });
+  await assertSucceeds(depBatch.commit());
+
+  // Duplicate Transaction ID MUST fail for same user or another user
+  const dupDepBatch = bobDb.batch();
+  dupDepBatch.set(bobDb.collection("depositRequests").doc("dep_dup"), {
+    ...depPayload,
+    userId: BOB_UID,
+    userEmail: "bob@gmail.com",
+  });
+  dupDepBatch.set(bobDb.collection("usedTransactionIds").doc(tidKey), {
+    userId: BOB_UID,
+    depositId: "dep_dup",
+    transactionId: "EP99887766",
+    paymentMethod: "easypaisa",
+    createdAt: now,
+  });
+  await assertFails(dupDepBatch.commit());
 
   // Player CANNOT self-approve own deposit request
   await assertFails(aliceDb.collection("depositRequests").doc("dep_1").update({ status: "approved", updatedAt: now }));
-
-  // Player CANNOT submit an already-approved deposit
-  await assertFails(aliceDb.collection("depositRequests").doc("dep_2").set({ ...depPayload, status: "approved" }));
 
   // Bob CANNOT read Alice's deposit requests
   await assertFails(bobDb.collection("depositRequests").where("userId", "==", ALICE_UID).get());
@@ -349,7 +394,7 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
   // Alice CAN list her own deposit requests
   await assertSucceeds(aliceDb.collection("depositRequests").where("userId", "==", ALICE_UID).get());
 
-  // Admin CAN list and approve Alice's deposit request + credit balance
+  // Admin CAN list and approve Alice's deposit request + credit balance + record adminTransactions
   await assertSucceeds(adminDb.collection("depositRequests").orderBy("createdAt", "desc").get());
   const approveBatch = adminDb.batch();
   approveBatch.update(adminDb.collection("depositRequests").doc("dep_1"), {
@@ -374,9 +419,35 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
     balanceAfterPkr: 500,
     createdAt: now,
   });
+  approveBatch.set(adminDb.collection("adminTransactions").doc("tx_dep_1"), {
+    userId: ALICE_UID,
+    inGameName: "PK_Shadow",
+    userEmail: "alice@gmail.com",
+    type: "deposit",
+    direction: "credit",
+    amountPkr: 500,
+    title: "EasyPaisa Deposit Approved",
+    subtitle: "TID: EP99887766",
+    referenceId: "dep_1",
+    status: "completed",
+    balanceAfterPkr: 500,
+    createdAt: now,
+  });
   await assertSucceeds(approveBatch.commit());
 
-  // Withdrawal WITHOUT atomic balance hold must fail
+  // Re-approving an already approved deposit MUST fail
+  await assertFails(
+    adminDb.collection("depositRequests").doc("dep_1").update({
+      status: "approved",
+      updatedAt: now,
+    })
+  );
+
+  // Admin can read adminTransactions, regular players CANNOT
+  await assertSucceeds(adminDb.collection("adminTransactions").orderBy("createdAt", "desc").get());
+  await assertFails(aliceDb.collection("adminTransactions").get());
+
+  // Withdrawal below 200 PKR MUST fail server-side
   const wdPayload = {
     userId: ALICE_UID,
     inGameName: "PK_Shadow",
@@ -391,9 +462,15 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
     createdAt: now,
     updatedAt: now,
   };
+  const underMinWdBatch = aliceDb.batch();
+  underMinWdBatch.set(aliceDb.collection("withdrawalRequests").doc("wd_low"), { ...wdPayload, amountPkr: 150 });
+  underMinWdBatch.update(aliceDb.collection("users").doc(ALICE_UID), { walletBalancePkr: 350, updatedAt: now });
+  await assertFails(underMinWdBatch.commit());
+
+  // Withdrawal WITHOUT atomic balance hold must fail
   await assertFails(aliceDb.collection("withdrawalRequests").doc("wd_bad").set(wdPayload));
 
-  // Withdrawal WITH atomic balance hold (500 -> 300) succeeds
+  // Withdrawal >= 200 PKR WITH atomic balance hold (500 -> 300) + adminTransactions succeeds
   const wdBatch = aliceDb.batch();
   wdBatch.set(aliceDb.collection("withdrawalRequests").doc("wd_1"), wdPayload);
   wdBatch.update(aliceDb.collection("users").doc(ALICE_UID), {
@@ -405,8 +482,22 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
     type: "withdrawal",
     direction: "debit",
     amountPkr: 200,
-    title: "JazzCash Withdrawal Request",
-    subtitle: "To: 03001234567",
+    title: "JazzCash Withdrawal",
+    subtitle: "To: 03001234567 (Ali Khan)",
+    referenceId: "wd_1",
+    status: "pending",
+    balanceAfterPkr: 300,
+    createdAt: now,
+  });
+  wdBatch.set(aliceDb.collection("adminTransactions").doc("tx_wd_1"), {
+    userId: ALICE_UID,
+    inGameName: "PK_Shadow",
+    userEmail: "alice@gmail.com",
+    type: "withdrawal",
+    direction: "debit",
+    amountPkr: 200,
+    title: "JazzCash Withdrawal",
+    subtitle: "To: 03001234567 (Ali Khan)",
     referenceId: "wd_1",
     status: "pending",
     balanceAfterPkr: 300,
@@ -414,3 +505,4 @@ test("Wallet deposits, withdrawals, self-credit prevention, and admin verificati
   });
   await assertSucceeds(wdBatch.commit());
 });
+

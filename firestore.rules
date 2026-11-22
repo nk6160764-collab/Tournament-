@@ -137,10 +137,11 @@ service cloud.firestore {
       return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
              data.inGameName is string && data.inGameName.size() >= 2 && data.inGameName.size() <= 40 &&
              data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 200 &&
-             data.amountPkr is int && data.amountPkr >= 10 && data.amountPkr <= 500000 &&
+             data.amountPkr is int && data.amountPkr >= 100 && data.amountPkr <= 500000 &&
              data.paymentMethod in ['easypaisa', 'jazzcash'] &&
              data.receiverAccountNumber in ['03489674834', '03406690336'] &&
              data.transactionId is string && data.transactionId.size() >= 4 && data.transactionId.size() <= 64 &&
+             (!('tidKey' in data) || (isValidId(data.tidKey) && data.tidKey.size() >= 6)) &&
              (!('senderNumber' in data) || (data.senderNumber is string && data.senderNumber.size() <= 25)) &&
              data.screenshotBase64 is string && data.screenshotBase64.size() >= 20 && data.screenshotBase64.size() <= 600000 &&
              data.status in ['pending', 'approved', 'rejected'] &&
@@ -154,7 +155,7 @@ service cloud.firestore {
       return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
              data.inGameName is string && data.inGameName.size() >= 2 && data.inGameName.size() <= 40 &&
              data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 200 &&
-             data.amountPkr is int && data.amountPkr >= 50 && data.amountPkr <= 500000 &&
+             data.amountPkr is int && data.amountPkr >= 200 && data.amountPkr <= 500000 &&
              data.paymentMethod in ['easypaisa', 'jazzcash'] &&
              data.accountNumber is string && data.accountNumber.size() >= 7 && data.accountNumber.size() <= 20 &&
              data.accountTitle is string && data.accountTitle.size() >= 2 && data.accountTitle.size() <= 60 &&
@@ -176,6 +177,12 @@ service cloud.firestore {
              data.status in ['completed', 'pending', 'rejected'] &&
              data.balanceAfterPkr is int && data.balanceAfterPkr >= 0 && data.balanceAfterPkr <= 100000000 &&
              data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAdminWalletTransaction(data) {
+      return isValidWalletTransaction(data) &&
+             data.inGameName is string && data.inGameName.size() >= 1 && data.inGameName.size() <= 60 &&
+             data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 200;
     }
 
     // --- COLLECTION RULES ---
@@ -421,17 +428,42 @@ service cloud.firestore {
       allow create: if isValidId(requestId) && isSignedIn() &&
                        incoming().userId == request.auth.uid &&
                        incoming().status == 'pending' &&
+                       'tidKey' in incoming() &&
                        isValidDepositRequest(incoming()) &&
-                       incoming().keys().hasAll(['userId', 'inGameName', 'userEmail', 'amountPkr', 'paymentMethod', 'receiverAccountNumber', 'transactionId', 'screenshotBase64', 'status', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['userId', 'inGameName', 'userEmail', 'amountPkr', 'paymentMethod', 'receiverAccountNumber', 'transactionId', 'senderNumber', 'screenshotBase64', 'status', 'adminNote', 'reviewedBy', 'createdAt', 'updatedAt']);
+                       incoming().keys().hasAll(['userId', 'inGameName', 'userEmail', 'amountPkr', 'paymentMethod', 'receiverAccountNumber', 'transactionId', 'tidKey', 'screenshotBase64', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'inGameName', 'userEmail', 'amountPkr', 'paymentMethod', 'receiverAccountNumber', 'transactionId', 'tidKey', 'senderNumber', 'screenshotBase64', 'status', 'adminNote', 'reviewedBy', 'createdAt', 'updatedAt']) &&
+                       !exists(/databases/$(database)/documents/usedTransactionIds/$(incoming().tidKey)) &&
+                       existsAfter(/databases/$(database)/documents/usedTransactionIds/$(incoming().tidKey));
 
       allow update: if isValidId(requestId) && isAdmin() &&
+                       existing().status == 'pending' &&
+                       incoming().status in ['approved', 'rejected'] &&
                        isValidDepositRequest(incoming()) &&
                        incoming().userId == existing().userId &&
                        incoming().amountPkr == existing().amountPkr &&
+                       incoming().transactionId == existing().transactionId &&
+                       incoming().get('tidKey', '') == existing().get('tidKey', '') &&
                        incoming().createdAt == existing().createdAt;
 
       allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    match /usedTransactionIds/{tidKey} {
+      allow get: if isValidId(tidKey) && isSignedIn();
+      allow list: if isAdmin();
+
+      allow create: if isValidId(tidKey) && isSignedIn() &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().depositId is string && isValidId(incoming().depositId) &&
+                       incoming().transactionId is string && incoming().transactionId.size() >= 4 && incoming().transactionId.size() <= 64 &&
+                       incoming().paymentMethod in ['easypaisa', 'jazzcash'] &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().keys().hasAll(['userId', 'depositId', 'transactionId', 'paymentMethod', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'depositId', 'transactionId', 'paymentMethod', 'createdAt']) &&
+                       existsAfter(/databases/$(database)/documents/depositRequests/$(incoming().depositId));
+
+      allow update: if false;
+      allow delete: if isValidId(tidKey) && isAdmin();
     }
 
     match /withdrawalRequests/{requestId} {
@@ -449,12 +481,34 @@ service cloud.firestore {
                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('walletBalancePkr', 0) - incoming().amountPkr;
 
       allow update: if isValidId(requestId) && isAdmin() &&
+                       existing().status == 'pending' &&
+                       incoming().status in ['approved', 'rejected'] &&
                        isValidWithdrawalRequest(incoming()) &&
                        incoming().userId == existing().userId &&
                        incoming().amountPkr == existing().amountPkr &&
                        incoming().createdAt == existing().createdAt;
 
       allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    match /adminTransactions/{txId} {
+      allow get: if isValidId(txId) && isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if isValidId(txId) && isSignedIn() &&
+                       isValidAdminWalletTransaction(incoming()) &&
+                       incoming().keys().hasAll(['userId', 'inGameName', 'userEmail', 'type', 'direction', 'amountPkr', 'title', 'subtitle', 'referenceId', 'status', 'balanceAfterPkr', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'inGameName', 'userEmail', 'type', 'direction', 'amountPkr', 'title', 'subtitle', 'referenceId', 'status', 'balanceAfterPkr', 'createdAt']) && (
+                         isAdmin() ||
+                         (
+                           isOwner(incoming().userId) &&
+                           incoming().direction == 'debit' &&
+                           incoming().type in ['tournament_entry', 'withdrawal'] &&
+                           existsAfter(/databases/$(database)/documents/users/$(incoming().userId)/walletTransactions/$(txId))
+                         )
+                       );
+
+      allow update, delete: if false;
     }
   }
 }

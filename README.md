@@ -21,16 +21,16 @@
 5. **Wallet System & Payments (`WalletScreen`)**:
    - **My Wallet**: Live Available Balance (PKR), Add Money, Withdraw Money, full Transaction History, Deposit History, Withdrawal History, and Tournament Fee History filter.
    - **Payment Methods**: **EasyPaisa (`03489674834`)** and **JazzCash (`03406690336`)** with one-tap account number copy.
-   - **Add Money Flow**: Players enter deposit amount, choose EasyPaisa or JazzCash, submit Transaction ID (TID), and attach a payment screenshot via Android's zero-permission Photo Picker; Admins inspect the screenshot and approve/credit atomically.
+   - **Add Money Flow**: Minimum **100 PKR** deposit; players enter amount, choose EasyPaisa or JazzCash, submit unique Transaction ID (TID — duplicates blocked atomically), and attach a payment screenshot via Android's zero-permission Photo Picker; balance is only credited after Admin approval.
    - **Tournament Entry**: Confirmation dialog displays current and post-entry wallet balance and atomically deducts the entry fee upon joining.
-   - **Withdraw System**: Players request withdrawals (min 50 PKR) with atomic balance hold; Admins mark paid or reject with automatic balance refund.
+   - **Withdraw System**: Minimum **200 PKR** withdrawal with atomic balance hold and Pending / Approved / Rejected status tracking; Admins mark paid or reject with automatic balance refund.
 6. **Leaderboard (`LeaderboardScreen`)**:
    - Real-time Player Rankings and Team/Squad Rankings calculated from Match Points + Kill Points = Total Points.
 7. **Player Dashboard (`PlayerDashboardScreen`)**:
    - Wallet balance quick card, Active Joined Matches, Completed Match History, Editable Profile (IGN, Free Fire UID, Squad, WhatsApp), Notifications/Alerts, WhatsApp Support, Contact Email, About Us, and Rules & Regulations.
 8. **Admin Dashboard (`AdminDashboardScreen`)**:
    - Role-gated via `/admins/{uid}` and verified admin email in `firestore.rules`.
-   - Create, Edit, and Delete tournaments; update Room ID/Password & status; view registered players; publish match placements/kill points/winners (with optional PKR prize credit); verify pending deposit screenshots & withdrawal payouts in the **Wallet** tab; publish or delete global announcements; seed starter tournaments.
+   - Create, Edit, and Delete tournaments; update Room ID/Password & status; view registered players; publish match placements/kill points/winners (with optional PKR prize credit); verify pending deposit screenshots, search/copy TIDs, approve/reject deposits and withdrawals, and audit the complete platform transaction history in the **Wallet** tab; publish or delete global announcements; seed starter tournaments.
 
 ---
 
